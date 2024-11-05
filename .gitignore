@@ -1,0 +1,16 @@
+# Ignore object files
+*.o
+
+# Ignore any other build artifacts or temporary files
+*.obj
+*.exe
+*.out
+*.log
+
+# Ignore other common directories used for build artifacts
+/dir
+
+# Ignore any editor-specific or temporary files
+*.swp
+*.swo
+*~
