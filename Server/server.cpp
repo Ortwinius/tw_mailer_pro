@@ -85,45 +85,88 @@ void Server::listen_for_connections()
 
 void Server::handle_communication(int consfd)
 {
-    const int bufferSize = 1024;
-    char buffer[bufferSize];
+    ssize_t bufferSize = 64;
+    char* buffer = new char[bufferSize];
+    bool validFormat=true;
 
     while (true)
     {
-        ssize_t size = recv(consfd, buffer, bufferSize - 1, 0);
-        if (size <= 0)
+        ssize_t totalReceived = recv(consfd, buffer, bufferSize - 1, 0);
+        if (totalReceived <= 0)
         {
             std::cerr << "Receive error or connection closed.\n";
             break;
         }
 
-        buffer[size] = '\0'; // Null-terminate the received message at currentSize (counted by recv)
+        buffer[totalReceived] = '\0'; // Null-terminate the received message at currentSize (counted by recv)
+
+        std::string message(buffer);
+
+        std::istringstream stream(message);
+        std::string command;
+        std::getline(stream, command);    // get Command (first line)
+
+        std::string contentLengthHeader;
+        std::getline(stream, contentLengthHeader);
+        int contentLength;
+
+        int headerAndCommandLength=command.length()+contentLengthHeader.length()+2; // +2 for \n in each line
+
+        // check if contentLengthHeader is correct Format(content-length: <length>), get length
+        if(checkContentLengthHeader(contentLengthHeader, contentLength))
+        {
+            std::cout<<"Content Length Header: "<<contentLengthHeader<<" | Content Length: "<<contentLength<<std::endl;
+            if(contentLength+headerAndCommandLength>totalReceived)
+            {
+                resizeBuffer(buffer,bufferSize,headerAndCommandLength+contentLength+1);
+
+                ssize_t remaining = bufferSize - totalReceived;
+                ssize_t received = recv(consfd, &buffer[totalReceived], remaining, 0);
+
+                totalReceived+=received;
+
+                buffer[totalReceived]='\0';
+
+                std::cout<<"TotalReceived: "<<totalReceived<<" | Buffer size: "<<bufferSize<<std::endl;
+                message=std::string(buffer);
+            }
+        }
+        else
+        {
+            validFormat=false;
+        }
 
         std::cout << "Received: " << buffer << "\n";
 
+        if(!validFormat)
+        {
+            std::cout << "Invalid Format received" << std::endl;
+            send(consfd, "ERR\n", 4, 0); // Respond with an error message
+        }
+
         // QUIT to close conn
-        if (strncmp(buffer, "QUIT", 4) == 0)
+        if (command=="QUIT")
         {
             std::cout << "Closing connection with client" << std::endl;
             close(consfd);
             break;
         }
-        if (strncmp(buffer, "SEND", 4) == 0)
+        if (command=="SEND")
         {
             std::cout << "Processing SEND command" << std::endl;
             handle_send(consfd, buffer);
         }
-        else if (strncmp(buffer, "LIST", 4) == 0)
+        else if (command=="LIST")
         {
             std::cout << "Processing LIST command" << std::endl;
             handle_list(consfd, buffer);
         }
-        else if (strncmp(buffer, "READ", 4) == 0)
+        else if (command=="READ")
         {
             std::cout << "Processing READ command" << std::endl;
             handle_read(consfd, buffer);
         }
-        else if (strncmp(buffer, "DEL", 3) == 0)
+        else if (command=="DEL")
         {
             std::cout << "Processing DEL command" << std::endl;
             handle_delete(consfd, buffer);
@@ -134,7 +177,59 @@ void Server::handle_communication(int consfd)
             send(consfd, "ERR\n", 4, 0); // Respond with an error message
         }
     }
-    close(consfd); // Ensure the peer socket is closed
+    delete[] buffer; // Free the buffer memory
+    close(consfd);   // Ensure the peer socket is closed
+}
+
+void Server::resizeBuffer(char*& buffer, ssize_t& currentSize, ssize_t newCapacity) {
+    if (newCapacity <= currentSize) {
+        return;  // No resizing needed if the new size is smaller or equal
+    }
+
+    // Allocate new memory
+    char* newBuffer = new char[newCapacity];
+
+    // Copy old data into the new buffer
+    std::memcpy(newBuffer, buffer, currentSize);
+
+    // Free the old buffer
+    delete[] buffer;
+
+    // Update the buffer pointer and size
+    buffer = newBuffer;
+    currentSize=newCapacity;
+}
+
+bool Server::checkContentLengthHeader(std::string &contentLengthHeader, int &contentLength)
+{
+    if (contentLengthHeader.rfind("Content-Length:", 0) == 0) // Starts with "content-length:"
+    {
+        // get the actual length
+        std::string lengthStr = contentLengthHeader.substr(15);
+        lengthStr.erase(0, lengthStr.find_first_not_of(" \t")); // Trim leading spaces
+        lengthStr.erase(lengthStr.find_last_not_of(" \t") + 1);
+
+        try
+        {
+            contentLength = std::stoul(lengthStr); // Convert to size_t
+        }
+        catch (const std::invalid_argument &)
+        {
+            std::cout << "Invalid content-length value." << std::endl;
+            return false;
+        }
+        catch (const std::out_of_range &)
+        {
+            std::cout << "Content-length value out of range." << std::endl;
+            return false;
+        }
+    }
+    else
+    {
+        std::cout << "Invalid format" << std::endl;
+        return false;
+    }
+    return true;
 }
 
 void Server::handle_list(int consfd, const std::string &buffer)

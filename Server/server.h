@@ -19,6 +19,8 @@ private:
     void init_socket();
     void listen_for_connections();
     void handle_communication(int consfd);
+    void resizeBuffer(char *&buffer, ssize_t& currentSize, ssize_t newCapacity);
+    bool checkContentLengthHeader(std::string &contentLengthHeader, int &contentLength);
     void handle_list(int consfd, const std::string &buffer);
     void handle_send(int consfd, const std::string &buffer);
     void handle_read(int consfd, const std::string &buffer);

@@ -148,6 +148,14 @@ void Client::handle_login()
 // Method to handle the SEND command
 void Client::handle_send() 
 {
+    // HARDCODED TEST
+    std::string messageBody="Valentin\nOrtwin\nMail1\nHallo mein Name ist Valentin\nLG\n.\n";
+    std::string messageToSend = "SEND\nContent-Length:" + std::to_string(messageBody.length()) + "\n"+messageBody;
+
+    send_command(messageToSend);
+    return;
+    // TEST ENDE
+
     if (!validate_action()) return;
 
     std::string sender, receiver, subject;
