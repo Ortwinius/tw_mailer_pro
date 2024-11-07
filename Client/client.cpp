@@ -11,6 +11,8 @@ Client::Client(const std::string& ip, int port)
 , port(port)
 , socket_fd(-1) 
 {
+    logged_in = false;
+    username = "";
     init_socket();
 }
 
@@ -68,7 +70,11 @@ void Client::handle_user_input() {
             input_valid = true;
             handle_quit();
             break;
-        } else if (input == "SEND") {
+        } else if(input == "LOGIN"){
+            input_valid = true;
+            handle_login();
+        }
+        else if (input == "SEND") {
             input_valid = true;
             handle_send();
         } else if (input == "LIST") {
@@ -84,7 +90,7 @@ void Client::handle_user_input() {
             std::cerr << "Input is not valid: unknown command." << std::endl;
         }
 
-        if(input_valid)
+        if(input_valid && logged_in)
         {
             handle_response();
             input_valid = false; //reset validation flag
@@ -118,10 +124,35 @@ void Client::merge_multiline_command(const std::string &initial_command) {
     send_command(buffer);
 }
 
+void Client::handle_login()
+{
+    if (logged_in)
+    {
+        std::cerr << "Error: Already logged in" << std::endl;
+        return;
+    }
+
+    std::string password;
+
+    std::cout << "Username: ";
+    std::cin >> username;
+    std::cout << "Password: ";
+    std::cin >> password;
+
+    std::string command = "LOGIN\n" + username + "\n" + password;
+    send_command(command);
+
+    // TODO: logic if server returned OK ? -> set logged_in to true
+}                                                    
+
 // Method to handle the SEND command
-void Client::handle_send() {
+void Client::handle_send() 
+{
+    if (!validate_action()) return;
+
     std::string sender, receiver, subject;
     
+    // to be deleted
     std::cout << "Sender: ";
     std::getline(std::cin, sender);
 
@@ -137,8 +168,11 @@ void Client::handle_send() {
 
 // Method to handle the LIST command
 void Client::handle_list() {
+    if (!validate_action()) return;
+
     std::string username;
 
+    // to be deleted
     std::cout << "Username: ";
     std::getline(std::cin, username);
 
@@ -148,8 +182,11 @@ void Client::handle_list() {
 
 // Method to handle the READ command
 void Client::handle_read() {
+    if (!validate_action()) return;
+
     std::string username, msg_number;
 
+    // to be deleted
     std::cout << "Username: ";
     std::getline(std::cin, username);
 
@@ -162,8 +199,11 @@ void Client::handle_read() {
 
 // Method to handle the DELETE command
 void Client::handle_delete() {
+    if (!validate_action()) return;
+
     std::string username, msg_number;
 
+    // to be deleted
     std::cout << "Username: ";
     std::getline(std::cin, username);
 
@@ -177,6 +217,16 @@ void Client::handle_delete() {
 // Method to handle the QUIT command
 void Client::handle_quit() {
     send_command("QUIT\n");
+}
+
+bool Client::validate_action()
+{
+    if (!logged_in)
+    {
+        std::cerr << "You are not logged in yet. You cant perform this action" << std::endl;
+        return false;
+    }
+    return true;
 }
 
 // Method to handle responses from the server

@@ -78,7 +78,6 @@ void Server::listen_for_connections()
             std::cerr << "Unable to accept client connection.\n";
             continue; // Continue accepting other connections
         }
-
         std::cout << "Accepted connection with file descriptor: " << peersoc << "\n";
         handle_communication(peersoc);
     }

@@ -19,6 +19,9 @@ private:
     std::string ip_address;
     int port;
     int socket_fd;
+    // user credentials
+    std::string username;
+    bool logged_in;
 
     // Private methods for internal functionality
     void init_socket();
@@ -26,12 +29,14 @@ private:
     void handle_user_input();
     void send_command(const std::string &command);
     void merge_multiline_command(const std::string &initial_command);
+    void handle_login();
     void handle_response();
     void handle_send();
     void handle_list();
     void handle_read();
     void handle_delete();
     void handle_quit();
+    bool validate_action();
 };
 
 #endif // CLIENT_H
