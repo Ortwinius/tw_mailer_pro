@@ -11,6 +11,7 @@ Client::Client(const std::string& ip, int port)
 , port(port)
 , socket_fd(-1) 
 {
+    clientsideValidation = false;
     logged_in = false;
     username = "";
     init_socket();
@@ -59,12 +60,13 @@ void Client::connect_to_server() {
 
 // Method to handle user input and commands
 void Client::handle_user_input() {
+    //std::unordered_map<std::string, void*> functionMap;
+
     std::string input;
     bool input_valid = false;
 
     while (true) {
-        std::cout << "> ";  
-        std::getline(std::cin, input);
+        getUserInput(">", input);
 
         if (input == "QUIT") {
             input_valid = true;
@@ -98,145 +100,12 @@ void Client::handle_user_input() {
     }
 }
 
-// Method to send a simple command
+// Method to send the final command
 void Client::send_command(const std::string &command) {
     if (send(socket_fd, command.c_str(), command.length(), 0) == -1) {
         std::cerr << "Sending failed" << std::endl;
     }
 }
-
-// Method to merge a multiline command (e.g., for SEND)
-void Client::merge_multiline_command(const std::string &initial_command) {
-    std::string buffer = initial_command + "\n";
-    std::string input;
-
-    std::cout << "Enter message content. End with a single '.' on a line by itself:\n";
-
-    while (true) {
-        std::getline(std::cin, input);
-        if (input == ".") {
-            buffer += ".\n";
-            break;
-        }
-        buffer += input + "\n";
-    }
-
-    send_command(buffer);
-}
-
-void Client::handle_login()
-{
-    if (logged_in)
-    {
-        std::cerr << "Error: Already logged in" << std::endl;
-        return;
-    }
-
-    std::string password;
-
-    std::cout << "Username: ";
-    std::cin >> username;
-    std::cout << "Password: ";
-    std::cin >> password;
-
-    std::string command = "LOGIN\n" + username + "\n" + password;
-    send_command(command);
-
-    // TODO: logic if server returned OK ? -> set logged_in to true
-}                                                    
-
-// Method to handle the SEND command
-void Client::handle_send() 
-{
-    // HARDCODED TEST
-    std::string messageBody="Valentin\nOrtwin\nMail1\nHallo mein Name ist Valentin\nLG\n.\n";
-    std::string messageToSend = "SEND\nContent-Length:" + std::to_string(messageBody.length()) + "\n"+messageBody;
-
-    send_command(messageToSend);
-    return;
-    // TEST ENDE
-
-    if (!validate_action()) return;
-
-    std::string sender, receiver, subject;
-    
-    // to be deleted
-    std::cout << "Sender: ";
-    std::getline(std::cin, sender);
-
-    std::cout << "Receiver: ";
-    std::getline(std::cin, receiver);
-
-    std::cout << "Subject: ";
-    std::getline(std::cin, subject);
-
-    std::string initial_command = "SEND\n" + sender + "\n" + receiver + "\n" + subject;
-    merge_multiline_command(initial_command);
-}
-
-// Method to handle the LIST command
-void Client::handle_list() {
-    if (!validate_action()) return;
-
-    std::string username;
-
-    // to be deleted
-    std::cout << "Username: ";
-    std::getline(std::cin, username);
-
-    std::string command = "LIST\n" + username + "\n";
-    send_command(command);
-}
-
-// Method to handle the READ command
-void Client::handle_read() {
-    if (!validate_action()) return;
-
-    std::string username, msg_number;
-
-    // to be deleted
-    std::cout << "Username: ";
-    std::getline(std::cin, username);
-
-    std::cout << "Message number: ";
-    std::getline(std::cin, msg_number);
-
-    std::string command = "READ\n" + username + "\n" + msg_number + "\n";
-    send_command(command);
-}
-
-// Method to handle the DELETE command
-void Client::handle_delete() {
-    if (!validate_action()) return;
-
-    std::string username, msg_number;
-
-    // to be deleted
-    std::cout << "Username: ";
-    std::getline(std::cin, username);
-
-    std::cout << "Message number: ";
-    std::getline(std::cin, msg_number);
-
-    std::string command = "DEL\n" + username + "\n" + msg_number + "\n";
-    send_command(command);
-}
-
-// Method to handle the QUIT command
-void Client::handle_quit() {
-    send_command("QUIT\n");
-}
-
-bool Client::validate_action()
-{
-    if (!logged_in)
-    {
-        std::cerr << "You are not logged in yet. You cant perform this action" << std::endl;
-        return false;
-    }
-    return true;
-}
-
 // Method to handle responses from the server
 void Client::handle_response() {
     char buffer[1024];
@@ -251,4 +120,109 @@ void Client::handle_response() {
         std::cerr << "Receive failed" << std::endl;
     }
 }
+
+void Client::handle_login()
+{
+    if (clientsideValidation && logged_in)
+    {
+        std::cerr << "Error: Already logged in" << std::endl;
+        return;
+    }
+
+    std::string inputUsername, inputPassword;
+    getUserInput("Username: ", inputUsername);
+    getUserInput("Password: ", inputPassword);
+
+    CommandBuilder builder;
+    builder.addParameter(inputUsername);
+    builder.addParameter(inputPassword);
+
+    std::string cmd = builder.buildFinalCommand("LOGIN");
+    send_command(cmd);
+    // TODO: logic if server returned OK ? -> set logged_in to true IF CLIENTSIDE VALIDATION
+}                                                    
+
+// Method to handle the SEND command
+void Client::handle_send() 
+{
+    if (clientsideValidation && !validate_action()) return;
+
+    std::string sender, receiver, subject;
+    // getUserInput("Sender: ", sender);
+    getUserInput("Receiver: ", receiver);
+    getUserInput("Subject: ", subject);
+
+    CommandBuilder builder;
+    builder.addParameter(username); // if user is not logged in -> username is empty
+    builder.addParameter(receiver);
+    builder.addParameter(subject);
+    builder.addMessageContent();
+
+    std::string command = builder.buildFinalCommand("SEND");
+    send_command(command);
+}
+
+// Method to handle the LIST command
+void Client::handle_list() {
+    if (clientsideValidation && !validate_action()) return;
+
+    std::string username;
+    getUserInput("Username: ", username);
+
+    CommandBuilder builder;
+    builder.addParameter(username);
+
+    std::string cmd = builder.buildFinalCommand("LIST");
+    send_command(cmd);
+}
+
+// Method to handle the READ command
+void Client::handle_read() {
+    if (clientsideValidation && !validate_action()) return;
+
+    std::string msg_number;
+    getUserInput("MsgNr: ", msg_number);
+
+    CommandBuilder builder;
+    builder.addParameter(username);
+    builder.addParameter(msg_number);
+
+    std::string cmd = builder.buildFinalCommand("READ");
+    send_command(cmd);
+}
+
+// Method to handle the DELETE command
+void Client::handle_delete() {
+    if (clientsideValidation && !validate_action()) return;
+
+    std::string username, msg_number;
+    getUserInput("Username: ", username);
+    getUserInput("Message number: ", msg_number);
+
+    CommandBuilder builder;
+    builder.addParameter(username);
+    builder.addParameter(msg_number);
+
+    std::string cmd = builder.buildFinalCommand("DEL");
+    send_command(cmd);
+}
+
+// Method to handle the QUIT command
+void Client::handle_quit() {
+    CommandBuilder builder;
+    std::string cmd = builder.buildFinalCommand("QUIT");
+    send_command(cmd);
+}
+
+bool Client::validate_action()
+{
+    if (!logged_in)
+    {
+        std::cerr << "You are not logged in yet. You cant perform this action" << std::endl;
+        return false;
+    }
+    return true;
+}
+
+
 

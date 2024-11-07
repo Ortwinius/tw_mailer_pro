@@ -2,6 +2,9 @@
 #define CLIENT_H
 
 #include <string>
+#include <unordered_map>
+#include "commandBuilder/commandBuilder.h"
+#include "../utils/helpers.h"
 
 class Client
 {
@@ -22,13 +25,14 @@ private:
     // user credentials
     std::string username;
     bool logged_in;
+    // flags
+    bool clientsideValidation;
 
     // Private methods for internal functionality
     void init_socket();
     void connect_to_server();
     void handle_user_input();
     void send_command(const std::string &command);
-    void merge_multiline_command(const std::string &initial_command);
     void handle_login();
     void handle_response();
     void handle_send();

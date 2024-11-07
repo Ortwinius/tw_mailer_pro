@@ -1,34 +1,30 @@
-# Variables for compiler and flags
+# Compiler und Flags
 CC = g++
-CFLAGS = -std=c++17 -Wall -Werror
+CFLAGS = -std=c++17 -Wall -Werror -g
 
-# Rule to build both 'twmailer-server' and 'twmailer-client'
-all: twmailer-server twmailer-client
+# Verzeichnisse für Quell- und Header-Dateien
+SERVER_DIR = Server
+CLIENT_DIR = Client
+UTILS_DIR = utils
 
-# Rule to build the 'twmailer-server' executable from 'server_main.cpp' and 'server.cpp'
-twmailer-server: Server/server_main.o Server/server.o
-	$(CC) $(CFLAGS) -o twmailer-server Server/server_main.o Server/server.o
+# Alle Quell- und Header-Dateien finden
+SERVER_SRCS = $(wildcard $(SERVER_DIR)/*.cpp)
+CLIENT_SRCS = $(wildcard $(CLIENT_DIR)/*.cpp) Client/commandBuilder/commandBuilder.cpp
+UTILS_SRCS = utils/helpers.cpp
 
-# Compile server_main.cpp into an object file
-Server/server_main.o: Server/server_main.cpp Server/server.h
-	$(CC) $(CFLAGS) -c Server/server_main.cpp -o Server/server_main.o
+# Ziel-Executables
+TARGETS = twmailer-server twmailer-client
 
-# Compile server.cpp into an object file
-Server/server.o: Server/server.cpp Server/server.h
-	$(CC) $(CFLAGS) -c Server/server.cpp -o Server/server.o
+# Hauptregel: Alle Ziele bauen
+all: $(TARGETS)
 
-# Rule to build the 'twmailer-client' executable from 'client_main.cpp' and 'client.cpp'
-twmailer-client: Client/client_main.o Client/client.o
-	$(CC) $(CFLAGS) -o twmailer-client Client/client_main.o Client/client.o
+# Regeln zum Bauen der Ziele
+twmailer-server: $(SERVER_SRCS) $(UTILS_SRCS)
+	$(CC) $(CFLAGS) $^ -o $@
 
-# Compile client_main.cpp into an object file
-Client/client_main.o: Client/client_main.cpp Client/client.h
-	$(CC) $(CFLAGS) -c Client/client_main.cpp -o Client/client_main.o
+twmailer-client: $(CLIENT_SRCS) $(UTILS_SRCS) 
+	$(CC) $(CFLAGS) $^ -o $@
 
-# Compile client.cpp into an object file
-Client/client.o: Client/client.cpp Client/client.h
-	$(CC) $(CFLAGS) -c Client/client.cpp -o Client/client.o
-
-# Clean up the 'twmailer-server' and 'twmailer-client' executables and object files
+# Regel zum Aufräumen
 clean:
-	rm -f twmailer-server twmailer-client Server/*.o Client/*.o
+	rm -f $(TARGETS)
