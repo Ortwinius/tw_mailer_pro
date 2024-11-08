@@ -42,6 +42,11 @@ std::string CommandBuilder::buildFinalCommand(const std::string &commandName)
         body += line;
     }
 
+
+    if (!body.empty() && body[0] == '\n') {
+        body.erase(0, 1);
+    }
+
     // add content length to the command
     commandStream << "Content-Length: " << body.length() << "\n" << body;
     return commandStream.str();
