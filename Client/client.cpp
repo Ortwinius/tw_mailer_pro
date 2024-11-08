@@ -92,7 +92,7 @@ void Client::handle_user_input() {
             std::cerr << "Input is not valid: unknown command." << std::endl;
         }
 
-        if(input_valid && logged_in)
+        if(input_valid)
         {
             handle_response();
             input_valid = false; //reset validation flag
@@ -166,11 +166,8 @@ void Client::handle_send()
 void Client::handle_list() {
     if (clientsideValidation && !validate_action()) return;
 
-    std::string username;
-    getUserInput("Username: ", username);
-
     CommandBuilder builder;
-    builder.addParameter(username);
+    builder.addParameter(username);// if user is not logged in -> username is empty
 
     std::string cmd = builder.buildFinalCommand("LIST");
     send_command(cmd);
@@ -184,7 +181,7 @@ void Client::handle_read() {
     getUserInput("MsgNr: ", msg_number);
 
     CommandBuilder builder;
-    builder.addParameter(username);
+    builder.addParameter(username); // if user is not logged in -> username is empty
     builder.addParameter(msg_number);
 
     std::string cmd = builder.buildFinalCommand("READ");
@@ -195,12 +192,11 @@ void Client::handle_read() {
 void Client::handle_delete() {
     if (clientsideValidation && !validate_action()) return;
 
-    std::string username, msg_number;
-    getUserInput("Username: ", username);
+    std::string msg_number;
     getUserInput("Message number: ", msg_number);
 
     CommandBuilder builder;
-    builder.addParameter(username);
+    builder.addParameter(username); // if user is not logged in -> username is empty
     builder.addParameter(msg_number);
 
     std::string cmd = builder.buildFinalCommand("DEL");

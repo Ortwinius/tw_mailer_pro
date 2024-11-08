@@ -8,6 +8,7 @@
 #include <cstring>
 #include <fstream>
 #include <sstream>
+#include <semaphore.h>
 #include "server.h"
 
 namespace fs = std::filesystem;
@@ -68,6 +69,12 @@ void Server::init_socket()
 
 void Server::listen_for_connections()
 {
+    int pid_t;
+
+    // init semaphore
+    sem_t sem;
+    sem_init(&sem, 1, 1);
+
     while (true)
     {
         struct sockaddr client;
@@ -78,16 +85,34 @@ void Server::listen_for_connections()
             std::cerr << "Unable to accept client connection.\n";
             continue; // Continue accepting other connections
         }
-        std::cout << "Accepted connection with file descriptor: " << peersoc << "\n";
-        handle_communication(peersoc);
+        pid_t =fork();
+        if (pid_t < 0) // error
+        {
+            std::cerr << "Error: Fork failed" << std::endl;
+            exit(EXIT_FAILURE);
+        }
+        else if (pid_t == 0) // child process
+        {
+            std::cout << "Accepted connection with file descriptor: " << peersoc << "\n";
+            handle_communication(peersoc, &sem);
+            exit(EXIT_SUCCESS);
+        }
+        else // parent process
+        {
+            std::cout<<"Parent process: forked child "<<pid_t<<" to handle communication with file descriptor  "<<peersoc<<std::endl;
+        }
+
     }
 }
 
-void Server::handle_communication(int consfd)
+void Server::handle_communication(int consfd, sem_t *sem)
 {
     ssize_t bufferSize = 64;
     char* buffer = new char[bufferSize];
+
     bool validFormat=true;
+    bool loggedIn=false;
+    std::string authenticatedUser="";
 
     while (true)
     {
@@ -115,7 +140,6 @@ void Server::handle_communication(int consfd)
         // check if contentLengthHeader is correct Format(content-length: <length>), get length
         if(checkContentLengthHeader(contentLengthHeader, contentLength))
         {
-            std::cout<<"Content Length Header: "<<contentLengthHeader<<" | Content Length: "<<contentLength<<std::endl;
             if(contentLength+headerAndCommandLength>totalReceived)
             {
                 resizeBuffer(buffer,bufferSize,headerAndCommandLength+contentLength+1);
@@ -127,7 +151,7 @@ void Server::handle_communication(int consfd)
 
                 buffer[totalReceived]='\0';
 
-                std::cout<<"TotalReceived: "<<totalReceived<<" | Buffer size: "<<bufferSize<<std::endl;
+                //std::cout<<"TotalReceived: "<<totalReceived<<" | Buffer size: "<<bufferSize<<std::endl;
                 message=std::string(buffer);
             }
         }
@@ -140,41 +164,52 @@ void Server::handle_communication(int consfd)
 
         if(!validFormat)
         {
-            std::cout << "Invalid Format received" << std::endl;
-            send(consfd, "ERR\n", 4, 0); // Respond with an error message
+            send_error(consfd, "Message has invalid format"); // Respond with an error message
         }
 
         // QUIT to close conn
         if (command=="QUIT")
         {
-            std::cout << "Closing connection with client" << std::endl;
+            std::cout << "Closing connection with client [FileDescriptor: "<<consfd<<"]" << std::endl;
             close(consfd);
             break;
         }
-        if (command=="SEND")
+        if(command=="LOGIN")
         {
-            std::cout << "Processing SEND command" << std::endl;
-            handle_send(consfd, buffer);
+            std::cout << "Processing LOGIN command" << std::endl;
+            handle_login(consfd, buffer, authenticatedUser, loggedIn);            
         }
-        else if (command=="LIST")
+        else if(loggedIn)
         {
-            std::cout << "Processing LIST command" << std::endl;
-            handle_list(consfd, buffer);
-        }
-        else if (command=="READ")
-        {
-            std::cout << "Processing READ command" << std::endl;
-            handle_read(consfd, buffer);
-        }
-        else if (command=="DEL")
-        {
-            std::cout << "Processing DEL command" << std::endl;
-            handle_delete(consfd, buffer);
+            if (command=="SEND")
+            {
+                std::cout << "Processing SEND command" << std::endl;
+                handle_send(consfd, buffer, authenticatedUser, sem);
+            }
+            else if (command=="LIST")
+            {
+                std::cout << "Processing LIST command" << std::endl;
+                handle_list(consfd, authenticatedUser, sem);
+            }
+            else if (command=="READ")
+            {
+                std::cout << "Processing READ command" << std::endl;
+                handle_read(consfd, buffer, authenticatedUser, sem);
+            }
+            else if (command=="DEL")
+            {
+                std::cout << "Processing DEL command" << std::endl;
+                handle_delete(consfd, buffer, authenticatedUser, sem);
+            }
+            else
+            {
+                send_error(consfd, "Message has unknown command"); // Respond with an error message
+            }
         }
         else
         {
-            std::cout << "Unknown command received" << std::endl;
-            send(consfd, "ERR\n", 4, 0); // Respond with an error message
+            std::cout<<"User unauthorized"<<std::endl;
+            send(consfd, "Unauthorized\n", 13, 0);
         }
     }
     delete[] buffer; // Free the buffer memory
@@ -232,87 +267,117 @@ bool Server::checkContentLengthHeader(std::string &contentLengthHeader, int &con
     return true;
 }
 
-void Server::handle_list(int consfd, const std::string &buffer)
+void Server::handle_login(int consfd, const std::string &buffer, std::string &authenticatedUser, bool &loggedIn)
 {
-    std::istringstream iss(buffer.substr(5)); // Extract the part after "LIST "
+    std::string line;
     std::string username;
-    std::getline(iss, username); // Read the username
+    std::string password;
 
-    if (!username.empty())
+    std::istringstream iss(buffer);
+
+    std::getline(iss, line, '\n'); // skip command and content-length header
+    std::getline(iss, line, '\n');
+
+    if (!std::getline(iss, username) || username.empty())
     {
-        fs::path userInbox = mail_directory / username; // Path to the user's inbox
-        if (!fs::exists(userInbox) || !fs::is_directory(userInbox))
-        {
-            std::cout << "No messages or user unknown" << std::endl;
-            send(consfd, "0\n", 2, 0);
-            return;
-        }
-
-        int messageCount = 0;
-        std::ostringstream response;
-
-        // Iterate over the directory and gather subjects in one pass
-        int counter = 0;
-        for (const auto &entry : fs::directory_iterator(userInbox))
-        {
-            counter++;
-            if (fs::is_regular_file(entry.path()))
-            {
-                std::ifstream messageFile(entry.path());
-                std::string line;
-                std::string subject;
-
-                std::getline(messageFile, line);
-                std::getline(messageFile, line); // skip sender and receiver
-
-                if (std::getline(messageFile, subject))
-                {
-                    messageCount++;
-                    response << "[" << counter << "] " << subject << "\n"; // Add subject to the response
-                }
-            }
-        }
-
-        // Construct the final response with the count first
-        std::ostringstream finalResponse;
-        finalResponse << messageCount << "\n"; // Add the message count first
-        finalResponse << response.str();       // Append all subjects
-
-        // Send the complete response
-        send(consfd, finalResponse.str().c_str(), finalResponse.str().size(), 0);
+        send_error(consfd,"Invalid sender in LOGIN");
+        return;
     }
-    else
+
+    if (!std::getline(iss, password) || password.empty())
     {
-        send(consfd, "ERR\n", 4, 0); // Send error if username is not provided
+        send_error(consfd, "Invalid password in LOGIN");
+        return;
     }
+
+
+    // TODO
+    // Check if user+password is valid in LDAP, then
+    // loggedIn=true;
+    // authenticatedUser=username;
+    // else
+    // {
+    //     send_error(consfd, "Invalid credentials in LOGIN");
+    // }
+
+
+    // To delete
+    loggedIn=true;
+    authenticatedUser=username;
+    send(consfd, "OK\n", 3, 0);
 }
 
-void Server::handle_send(int consfd, const std::string &buffer)
+void Server::handle_list(int consfd, const std::string &authenticatedUser, sem_t *sem)
 {
-    std::string command;
-    std::string sender;
+    fs::path userInbox = mail_directory / authenticatedUser; // Path to the user's inbox
+    if (!fs::exists(userInbox) || !fs::is_directory(userInbox))
+    {
+        std::cout << "No messages or user unknown" << std::endl;
+        send(consfd, "0\n", 2, 0);
+        return;
+    }
+
+    int messageCount = 0;
+    std::ostringstream response;
+
+    // Iterate over the directory and gather subjects in one pass
+    int counter = 0;
+    sem_wait(sem);
+    for (const auto &entry : fs::directory_iterator(userInbox))
+    {
+        counter++;
+
+        // lock Semaphore before iterating and reading through the files
+        if (fs::is_regular_file(entry.path()))
+        {
+            std::ifstream messageFile(entry.path());
+            std::string line;
+            std::string subject;
+
+            std::getline(messageFile, line);
+            std::getline(messageFile, line); // skip sender and receiver
+
+            if (std::getline(messageFile, subject))
+            {
+                messageCount++;
+                response << "[" << counter << "] " << subject << "\n"; // Add subject to the response
+            }
+        }
+    }
+    sem_post(sem);
+
+    // Construct the final response with the count first
+    std::ostringstream finalResponse;
+    finalResponse << messageCount << "\n"; // Add the message count first
+    finalResponse << response.str();       // Append all subjects
+
+    // Send the complete response
+    send(consfd, finalResponse.str().c_str(), finalResponse.str().size(), 0);
+}
+
+void Server::handle_send(int consfd, const std::string &buffer, const std::string &authenticatedUser, sem_t *sem)
+{
+    std::string skipLine;
     std::string receiver;
     std::string subject;
     std::string message;
 
     std::istringstream iss(buffer);
-    std::getline(iss, command, '\n'); // skip command
+    std::getline(iss, skipLine, '\n'); // skip command and content-length header
+    std::getline(iss, skipLine, '\n');
 
-    if (!std::getline(iss, sender) || sender.empty() || (!is_valid_username(sender)))
-    {
-        send(consfd, "ERR\n", 4, 0);
-        return;
-    }
+
+    // NOTE: evtl. is_valid_username entfernen/anpassen -> kommt drauf an wie die Namen im LDAP sind
 
     if (!std::getline(iss, receiver) || receiver.empty() || (!is_valid_username(receiver)))
     {
-        send(consfd, "ERR\n", 4, 0);
+        send_error(consfd, "Invalid receiver in SEND");
         return;
     }
 
     if (!std::getline(iss, subject) || subject.empty())
     {
-        send(consfd, "ERR\n", 4, 0);
+        send_error(consfd, "Invalid subject in SEND");
         return;
     }
 
@@ -325,45 +390,45 @@ void Server::handle_send(int consfd, const std::string &buffer)
             message += line + "\n";
     }
 
-    fs::path receiverPath = mail_directory / receiver / (std::to_string(std::time(nullptr)) + "_" + sender + ".txt");
+    fs::path receiverPath = mail_directory / receiver / (std::to_string(std::time(nullptr)) + "_" + authenticatedUser + ".txt");
+
+    sem_wait(sem); // lock Semaphore before creating a directory and writing to a new file
     fs::create_directories(mail_directory / receiver);
 
     std::ofstream messageFile(receiverPath);
     if (messageFile.is_open())
     {
         // Write the structured message
-        messageFile << sender << "\n";
+        messageFile << authenticatedUser << "\n";
         messageFile << receiver << "\n";
         messageFile << subject << "\n";
         messageFile << message;
+
+        messageFile.close();
+        sem_post(sem); // unlock semaphore after closing messageFile
 
         std::cout << "Saved Mail " << subject << " in inbox of " << receiver << std::endl;
         send(consfd, "OK\n", 3, 0);
     }
     else
     {
-        send(consfd, "ERR\n", 4, 0);
+        sem_post(sem);// unlock semaphore if writing to file failed
+        send_error(consfd, "Error when opening folder to save mail");
     }
 }
 
-void Server::handle_read(int consfd, const std::string &buffer)
+void Server::handle_read(int consfd, const std::string &buffer, const std::string &authenticatedUser, sem_t *sem)
 {
-    std::string command;
-    std::string username;
+    std::string line;
     std::string messageNrString;
 
     std::istringstream iss(buffer);
-    std::getline(iss, command, '\n'); // skip command
-
-    if (!std::getline(iss, username) || username.empty())
-    {
-        send(consfd, "ERR\n", 4, 0);
-        return;
-    }
+    std::getline(iss, line, '\n'); // skip command and content-length header
+    std::getline(iss, line, '\n');
 
     if (!std::getline(iss, messageNrString) || messageNrString.empty())
     {
-        send(consfd, "ERR\n", 4, 0);
+        send_error(consfd, "Invalid Message number in READ");
         return;
     }
 
@@ -375,15 +440,16 @@ void Server::handle_read(int consfd, const std::string &buffer)
     catch (const std::exception &e)
     {
         std::cerr << e.what() << '\n';
-        send(consfd, "ERR\n", 4, 0);
+        send_error(consfd, "Error when parsing Message number to int in READ");
         return;
     }
 
-    fs::path userInbox = mail_directory / username; // Path to the user's inbox
+    sem_wait(sem); // Lock semaphore before checking file existance
+    fs::path userInbox = mail_directory / authenticatedUser; // Path to the user's inbox
     if (!fs::exists(userInbox) || !fs::is_directory(userInbox))
     {
-        std::cout << "No messages or user unknown" << std::endl;
-        send(consfd, "ERR\n", 4, 0);
+        sem_post(sem); //Unlock semaphore if dir doesnt exist
+        send_error(consfd,"No messages for user "+authenticatedUser+" in READ" );
         return;
     }
 
@@ -396,7 +462,7 @@ void Server::handle_read(int consfd, const std::string &buffer)
             std::ifstream messageFile(entry.path());
             if (!messageFile.is_open())
             {
-                send(consfd, "ERR\n", 4, 0); // Unable to open the message file
+                send_error(consfd, "Unable to open message file in READ"); // Unable to open the message file
                 return;
             }
 
@@ -408,34 +474,31 @@ void Server::handle_read(int consfd, const std::string &buffer)
                 messageContent<<line<<"\n";
             }
 
+            sem_post(sem); // Unlock semaphore after reading the file
+
             std::string response = "OK\n" + messageContent.str() + "\n"; // Add an additional newline at the end
             send(consfd, response.c_str(), response.size(), 0);
             return;
         }
     }
+    sem_post(sem); // unlock after iterator finished
 
     // invalid message number
-    send(consfd, "ERR\n", 4, 0);
+    send_error(consfd, "Invalid Message number in READ");
 }
 
-void Server::handle_delete(int consfd, const std::string &buffer)
+void Server::handle_delete(int consfd, const std::string &buffer, const std::string &authenticatedUser, sem_t *sem)
 {
-    std::string command;
-    std::string username;
+    std::string line;
     std::string messageNrString;
 
     std::istringstream iss(buffer);
-    std::getline(iss, command, '\n'); // Skip the command
-
-    if (!std::getline(iss, username) || username.empty())
-    {
-        send(consfd, "ERR\n", 4, 0);
-        return;
-    }
+    std::getline(iss, line, '\n'); // skip command and content-length header
+    std::getline(iss, line, '\n');
 
     if (!std::getline(iss, messageNrString) || messageNrString.empty())
     {
-        send(consfd, "ERR\n", 4, 0);
+        send_error(consfd, "Invalid message number in DEL");
         return;
     }
 
@@ -447,20 +510,24 @@ void Server::handle_delete(int consfd, const std::string &buffer)
     catch (const std::exception &e)
     {
         std::cerr << e.what() << '\n';
-        send(consfd, "ERR\n", 4, 0);
+        send_error(consfd, "Error when parsing message number to int in DEL");
         return;
     }
 
-    fs::path userInbox = mail_directory / username; // Path to the user's inbox
+
+
+    fs::path userInbox = mail_directory / authenticatedUser; // Path to the user's inbox
+
+    sem_wait(sem); // Lock semaphore before accessing the filesystem
     if (!fs::exists(userInbox) || !fs::is_directory(userInbox))
     {
-        std::cout << "No messages or user unknown" << std::endl;
-        send(consfd, "ERR\n", 4, 0);
+        send_error(consfd, "No messages or User unknown");
+        sem_post(sem); // Unlock if dir doesnt exist
         return;
     }
 
     int counter = 0;
-    bool messageFound = false;
+    bool messageDeleted = false;
     for (const auto &entry : fs::directory_iterator(userInbox))
     {
         counter++;
@@ -469,25 +536,22 @@ void Server::handle_delete(int consfd, const std::string &buffer)
             // Attempt to delete the message file
             if (fs::remove(entry.path()))
             {
-                messageFound = true; // Mark as found if deletion was successful
+                messageDeleted = true; // Mark as found if deletion was successful
                 break;
-            }
-            else
-            {
-                send(consfd, "ERR\n", 4, 0); // Failed to delete the file
-                return;
             }
         }
     }
+    sem_post(sem); //Unlock semaphore after deleting file
 
-    if (messageFound)
+    if (messageDeleted)
     {
         send(consfd, "OK\n", 3, 0); // Message deleted successfully
     }
     else
     {
-        send(consfd, "ERR\n", 4, 0); // Message number does not exist
+        send_error(consfd, "Failed to delete file in DEL"); // Message number does not exist
     }
+
 }
 
 const bool Server::is_valid_username(const std::string &name) 
@@ -507,4 +571,10 @@ const bool Server::is_valid_username(const std::string &name)
     }
 
     return true;
+}
+
+const void Server::send_error(const int consfd, const std::string errorMessage)
+{
+    std::cout<<"Send Error to Client - "<<errorMessage <<std::endl;
+    send(consfd, "ERR\n", 4, 0);
 }
