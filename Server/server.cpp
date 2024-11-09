@@ -38,7 +38,7 @@ void Server::init_socket()
     {
         throw std::runtime_error("Error initializing the server socket: " + std::to_string(errno));
     }
-
+    
     std::cout << "Socket was created with id " << socket_fd << "\n";
 
     // set up server address struct to bind socket to a specific address
@@ -99,7 +99,7 @@ void Server::listen_for_connections()
         }
         else // parent process
         {
-            std::cout<<"Parent process: forked child "<<pid_t<<" to handle communication with file descriptor  "<<peersoc<<std::endl;
+            std::cout << "Parent process: forked child " << pid_t << " to handle communication with file descriptor  " << peersoc << "\n";
         }
 
     }
@@ -127,7 +127,7 @@ void Server::handle_communication(int consfd, sem_t *sem)
 
         std::string message(buffer);
 
-        std::istringstream stream(message);
+        std::istringstream stream(message); // create stream for msg buffer 
         std::string command;
         std::getline(stream, command);    // get Command (first line)
 
@@ -135,29 +135,29 @@ void Server::handle_communication(int consfd, sem_t *sem)
         std::getline(stream, contentLengthHeader);
         int contentLength;
 
-        int headerAndCommandLength=command.length()+contentLengthHeader.length()+2; // +2 for \n in each line
+        int headerAndCommandLength = command.length() + contentLengthHeader.length() + ServerConstants::newLineCharacterSize; // +2 for \n in each line
 
         // check if contentLengthHeader is correct Format(content-length: <length>), get length
         if(checkContentLengthHeader(contentLengthHeader, contentLength))
         {
-            if(contentLength+headerAndCommandLength>totalReceived)
+            if(contentLength+headerAndCommandLength > totalReceived)
             {
-                resizeBuffer(buffer,bufferSize,headerAndCommandLength+contentLength+1);
+                resizeBuffer(buffer, bufferSize, headerAndCommandLength + contentLength + 1);
 
                 ssize_t remaining = bufferSize - totalReceived;
                 ssize_t received = recv(consfd, &buffer[totalReceived], remaining, 0);
 
-                totalReceived+=received;
+                totalReceived += received;
 
-                buffer[totalReceived]='\0';
+                buffer[totalReceived] = '\0';
 
                 //std::cout<<"TotalReceived: "<<totalReceived<<" | Buffer size: "<<bufferSize<<std::endl;
-                message=std::string(buffer);
+                message = std::string(buffer);
             }
         }
         else
         {
-            validFormat=false;
+            validFormat = false;
         }
 
         std::cout << "Received: " << buffer << "\n";
@@ -170,7 +170,7 @@ void Server::handle_communication(int consfd, sem_t *sem)
         // QUIT to close conn
         if (command=="QUIT")
         {
-            std::cout << "Closing connection with client [FileDescriptor: "<<consfd<<"]" << std::endl;
+            std::cout << "Closing connection with client [FileDescriptor: " << consfd << "]" << std::endl;
             close(consfd);
             break;
         }
@@ -208,7 +208,7 @@ void Server::handle_communication(int consfd, sem_t *sem)
         }
         else
         {
-            std::cout<<"User unauthorized"<<std::endl;
+            std::cout<<"User unauthorized" << std::endl;
             send(consfd, "Unauthorized\n", 13, 0);
         }
     }
@@ -302,8 +302,8 @@ void Server::handle_login(int consfd, const std::string &buffer, std::string &au
 
 
     // To delete
-    loggedIn=true;
-    authenticatedUser=username;
+    loggedIn = true;
+    authenticatedUser = username;
     send(consfd, "OK\n", 3, 0);
 }
 
