@@ -6,9 +6,11 @@ CFLAGS = -std=c++17 -Wall -Werror -g
 SERVER_DIR = Server
 CLIENT_DIR = Client
 UTILS_DIR = utils
+MAILMANAGER_DIR = Server/mail_manager
 
 # Alle Quell- und Header-Dateien finden
 SERVER_SRCS = $(wildcard $(SERVER_DIR)/*.cpp)
+MAILMANAGER_SRCS=$(wildcard $(MAILMANAGER_DIR)/*.cpp)
 CLIENT_SRCS = $(wildcard $(CLIENT_DIR)/*.cpp) Client/commandBuilder/commandBuilder.cpp
 UTILS_SRCS = utils/helpers.cpp
 
@@ -19,7 +21,7 @@ TARGETS = twmailer-server twmailer-client
 all: $(TARGETS)
 
 # Regeln zum Bauen der Ziele
-twmailer-server: $(SERVER_SRCS) $(UTILS_SRCS)
+twmailer-server: $(SERVER_SRCS) $(UTILS_SRCS) $(MAILMANAGER_SRCS)
 	$(CC) $(CFLAGS) $^ -o $@
 
 twmailer-client: $(CLIENT_SRCS) $(UTILS_SRCS) 

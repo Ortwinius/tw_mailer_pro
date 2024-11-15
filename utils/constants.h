@@ -3,7 +3,7 @@
 
 namespace ServerConstants
 {
-    constexpr int newLineCharacterSize = 2;
+    
 }
 
 #endif

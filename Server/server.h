@@ -5,6 +5,7 @@
 #include <string>
 #include <semaphore.h>
 #include "../utils/constants.h"
+#include "mail_manager/mail_manager.h"
 
 class Server 
 {
@@ -15,8 +16,9 @@ public:
 
 private:
     int port;
-    std::filesystem::path mail_directory;
     int socket_fd;
+    MailManager mail_manager;
+    std::filesystem::path mail_directory;
 
     void init_socket();
     void listen_for_connections();
