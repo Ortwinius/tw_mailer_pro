@@ -4,5 +4,5 @@
 #include <string>
 
 void getUserInput(const std::string& prompt, std::string& buffer);
-
+void getHiddenUserInput(const std::string& prompt, std::string& buffer);
 #endif

@@ -24,10 +24,7 @@ private:
     int socket_fd;
     // user credentials
     std::string username;
-    bool logged_in;
-    // flags
-    bool clientsideValidation;
-
+    
     // Private methods for internal functionality
     void init_socket();
     void connect_to_server();
@@ -40,7 +37,6 @@ private:
     void handle_read();
     void handle_delete();
     void handle_quit();
-    bool validate_action();
 };
 
 #endif // CLIENT_H

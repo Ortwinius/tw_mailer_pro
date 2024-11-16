@@ -164,7 +164,7 @@ void Server::handle_communication(int consfd, sem_t *sem) {
 
     // QUIT to close conn
     if (command == "QUIT") {
-      std::cout << "Closing connection with client [FileDescriptor: " << consfd << "]" << std::endl;
+      std::cout << "Closing connection with client [FileDescriptor: " << consfd << "]\n";
       close(consfd);
       break;
     }

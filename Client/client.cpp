@@ -11,8 +11,6 @@ Client::Client(const std::string& ip, int port)
 , port(port)
 , socket_fd(-1) 
 {
-    clientsideValidation = false;
-    logged_in = false;
     username = "";
     init_socket();
 }
@@ -122,31 +120,24 @@ void Client::handle_response() {
 }
 
 void Client::handle_login() {
-    if (clientsideValidation && logged_in)
-    {
-        std::cerr << "Error: Already logged in" << std::endl;
-        return;
-    }
-
     std::string inputUsername, inputPassword;
     getUserInput("Username: ", inputUsername);
-    getUserInput("Password: ", inputPassword);
+    getHiddenUserInput("Password: ", inputPassword);
 
     CommandBuilder builder;
     builder.addParameter(inputUsername);
     builder.addParameter(inputPassword);
 
+    username = inputUsername; // might be wrong - if so, in the next login-attempt it will be reset
+
     std::string cmd = builder.buildFinalCommand("LOGIN");
     send_command(cmd);
-    // TODO: logic if server returned OK ? -> set logged_in to true IF CLIENTSIDE VALIDATION
 }                                                    
 
 // Method to handle the SEND command
 void Client::handle_send() {
-    if (clientsideValidation && !validate_action()) return;
-
     std::string sender, receiver, subject;
-    // getUserInput("Sender: ", sender);
+
     getUserInput("Receiver: ", receiver);
     getUserInput("Subject: ", subject);
 
@@ -162,10 +153,8 @@ void Client::handle_send() {
 
 // Method to handle the LIST command
 void Client::handle_list() {
-    if (clientsideValidation && !validate_action()) return;
-
     CommandBuilder builder;
-    builder.addParameter(username);// if user is not logged in -> username is empty
+    builder.addParameter(username);
 
     std::string cmd = builder.buildFinalCommand("LIST");
     send_command(cmd);
@@ -173,13 +162,11 @@ void Client::handle_list() {
 
 // Method to handle the READ command
 void Client::handle_read() {
-    if (clientsideValidation && !validate_action()) return;
-
     std::string msg_number;
     getUserInput("MsgNr: ", msg_number);
 
     CommandBuilder builder;
-    builder.addParameter(username); // if user is not logged in -> username is empty
+    builder.addParameter(username); 
     builder.addParameter(msg_number);
 
     std::string cmd = builder.buildFinalCommand("READ");
@@ -188,13 +175,11 @@ void Client::handle_read() {
 
 // Method to handle the DELETE command
 void Client::handle_delete() {
-    if (clientsideValidation && !validate_action()) return;
-
     std::string msg_number;
     getUserInput("Message number: ", msg_number);
 
     CommandBuilder builder;
-    builder.addParameter(username); // if user is not logged in -> username is empty
+    builder.addParameter(username); 
     builder.addParameter(msg_number);
 
     std::string cmd = builder.buildFinalCommand("DEL");
@@ -208,15 +193,6 @@ void Client::handle_quit() {
     send_command(cmd);
 }
 
-bool Client::validate_action()
-{
-    if (!logged_in)
-    {
-        std::cerr << "You are not logged in yet. You cant perform this action" << std::endl;
-        return false;
-    }
-    return true;
-}
 
 
 
