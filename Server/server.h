@@ -7,6 +7,8 @@
 #include "../utils/constants.h"
 #include "mail_manager/mail_manager.h"
 
+namespace fs = std::filesystem;
+
 class Server 
 {
 public:
@@ -15,6 +17,7 @@ public:
     void run();
 
 private:
+    int attempted_logins_cnt;
     int port;
     int socket_fd;
     MailManager mail_manager;

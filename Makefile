@@ -1,6 +1,7 @@
 # Compiler und Flags
 CC = g++
-CFLAGS = -std=c++17 -Wall -Werror -g
+CFLAGS = -std=c++17 -Wall -Werror -g 
+LDAPFLAGS = -lldap -llber 
 
 # Verzeichnisse für Quell- und Header-Dateien
 SERVER_DIR = Server
@@ -22,7 +23,7 @@ all: $(TARGETS)
 
 # Regeln zum Bauen der Ziele
 twmailer-server: $(SERVER_SRCS) $(UTILS_SRCS) $(MAILMANAGER_SRCS)
-	$(CC) $(CFLAGS) $^ -o $@
+	$(CC) $(CFLAGS) $^ -o $@ $(LDAPFLAGS)
 
 twmailer-client: $(CLIENT_SRCS) $(UTILS_SRCS) 
 	$(CC) $(CFLAGS) $^ -o $@

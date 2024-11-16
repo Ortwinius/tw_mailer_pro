@@ -121,8 +121,7 @@ void Client::handle_response() {
     }
 }
 
-void Client::handle_login()
-{
+void Client::handle_login() {
     if (clientsideValidation && logged_in)
     {
         std::cerr << "Error: Already logged in" << std::endl;
@@ -143,8 +142,7 @@ void Client::handle_login()
 }                                                    
 
 // Method to handle the SEND command
-void Client::handle_send() 
-{
+void Client::handle_send() {
     if (clientsideValidation && !validate_action()) return;
 
     std::string sender, receiver, subject;

@@ -1,27 +1,38 @@
 #include "server.h"
 #include <arpa/inet.h>
 #include <cstring>
-#include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <semaphore.h>
 #include <signal.h>
 #include <sstream>
 #include <stdexcept>
-#include <string>
 #include <sys/socket.h>
 #include <unistd.h>
-
-namespace fs = std::filesystem;
+#include <ldap.h>
+#include <lber.h>
 
 // TODO: delete mail_directory variable
-Server::Server(int port, const fs::path &mailDirectory) : port(port), mail_manager(mailDirectory), mail_directory(mailDirectory) { init_socket(); }
+Server::Server(int port, const fs::path &mailDirectory) 
+: port(port)
+, mail_manager(mailDirectory)
+, mail_directory(mailDirectory) 
+{ 
+  attempted_logins_cnt = 0;
+  init_socket(); 
+}
 
-Server::~Server() { close(socket_fd); }
+Server::~Server() 
+{ 
+  close(socket_fd); 
+}
 
-void Server::run() { listen_for_connections(); }
+void Server::run() 
+{ 
+  listen_for_connections(); 
+}
 
-void Server::init_socket() {
+void Server::init_socket() 
+{
   // AF_INET (IPv4), SOCK_STREAM (typically TCP), 0 (default protocol)
   socket_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (socket_fd == -1) {
@@ -121,7 +132,7 @@ void Server::handle_communication(int consfd, sem_t *sem) {
     std::getline(stream, contentLengthHeader);
     int contentLength;
 
-    int headerAndCommandLength = command.length()+1 + contentLengthHeader.length()+1; // +1 for each newLine
+    int headerAndCommandLength = command.length()+ 1 + contentLengthHeader.length()+ 1; // +1 for each newLine
 
     // check if contentLengthHeader is correct Format(content-length: <length>),
     // get length
@@ -236,6 +247,11 @@ bool Server::checkContentLengthHeader(std::string &contentLengthHeader, int &con
 }
 
 void Server::handle_login(int consfd, const std::string &buffer, std::string &authenticatedUser, bool &loggedIn) {
+
+  // TODO
+  // IF ATTEMPTED_LOGIN_CNT > 3 && 1 MIN PASSED -> YOU CAN LOGIN AGAIN + DELETE NAME FROM BLACKLIST + RESET ATTEMPTED_CNT
+  // ELSE RETURN ERR
+
   std::string line;
   std::string username;
   std::string password;
@@ -255,19 +271,65 @@ void Server::handle_login(int consfd, const std::string &buffer, std::string &au
     return;
   }
 
-  // TODO
-  // Check if user+password is valid in LDAP, then
-  // loggedIn=true;
-  // authenticatedUser=username;
-  // else
-  // {
-  //     send_error(consfd, "Invalid credentials in LOGIN");
-  // }
+  LDAP *ldap_obj = nullptr;
+  const char *host = "ldap.technikum-wien.at";
+  int ldap_port = 389; 
 
-  // To delete
-  loggedIn = true;
-  authenticatedUser = username;
-  send(consfd, "OK\n", 3, 0);
+  std::string ldap_url = "ldap://" + std::string(host) + ":" + std::to_string(ldap_port);
+
+  int result = ldap_initialize(&ldap_obj, ldap_url.c_str());
+
+  if(result != LDAP_SUCCESS)
+  {
+    std::cerr << "LDAP initialization failed: " << ldap_err2string(result) << std::endl;
+    throw std::runtime_error("Error initializing LDAP");
+  }
+
+  int desired_version = LDAP_VERSION3;
+  result = ldap_set_option(ldap_obj, LDAP_OPT_PROTOCOL_VERSION, &desired_version);
+
+  if(result != LDAP_SUCCESS)
+  {
+    std::cerr << "Failed to set LDAP version " << ldap_err2string(result) << std::endl;
+    ldap_unbind_ext_s(ldap_obj, nullptr, nullptr); // Cleanup
+    throw std::runtime_error("Error setting LDAP version");
+  }
+
+  std::cout << "LDAP initialized and set to version 3\n";
+
+  std::string dn = "uid=" + username + ",ou=People,dc=technikum-wien,dc=at";
+
+  // cast password to LDAP-compatible BER-type
+  BerValue cred;
+  cred.bv_val = const_cast<char*>(password.c_str()); //const_cast to remove (const) bc ber-type expects non-const
+  cred.bv_len = password.length();
+
+  
+  // Perform SASL bind using SIMPLE mechanism
+  result = ldap_sasl_bind_s(
+      ldap_obj,       // LDAP session handle
+      dn.c_str(),     // Distinguished Name (DN)
+      nullptr,        // Mechanism ("SIMPLE" uses nullptr)
+      &cred,          // Pointer to credentials BerValue
+      nullptr,        // Server controls (nullptr for none)
+      nullptr,        // Client controls (nullptr for none)
+      nullptr         // Pointer for result server credentials (not needed here)
+  );
+
+  if (result == LDAP_SUCCESS) {
+      std::cout << "LDAP SASL bind successful for user: " << username << std::endl;
+      loggedIn = true;
+      authenticatedUser = username;
+      send(consfd, "OK\n", 3, 0);
+      return;
+  } 
+
+  // else error
+  std::cerr << "LDAP SASL bind failed: " << ldap_err2string(result) << std::endl;
+  send_error(consfd, "Invalid credentials in LOGIN");
+  loggedIn = false;
+  authenticatedUser.clear();
+  attempted_logins_cnt++;
 }
 
 void Server::handle_list(int consfd, const std::string &authenticatedUser, sem_t *sem) {
