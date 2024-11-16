@@ -1,13 +1,13 @@
-#include "commandBuilder.h"
+#include "command_builder.h"
 #include <iostream>
 #include <sstream>
 
-void CommandBuilder::addParameter(const std::string &param)
+void CommandBuilder::add_parameter(const std::string &param)
 {
     parameters.push_back(param);
 }
 
-void CommandBuilder::addMessageContent()
+void CommandBuilder::add_msg_content()
 {
     std::string line;
     std::cout << "Enter message content. End with a single '.' on a line by itself:\n";
@@ -17,18 +17,18 @@ void CommandBuilder::addMessageContent()
         std::getline(std::cin, line);
         if(line == ".")
         {
-            messageLines.push_back(".\n");
+            message_lines.push_back(".\n");
             break;
         }
-        messageLines.push_back(line + "\n");
+        message_lines.push_back(line + "\n");
     }
 }
 
-std::string CommandBuilder::buildFinalCommand(const std::string &commandName)
+std::string CommandBuilder::build_final_cmd(const std::string &cmd_name)
 {
-    std::ostringstream commandStream;
+    std::ostringstream cmd_stream;
 
-    commandStream << commandName << "\n";
+    cmd_stream << cmd_name << "\n";
 
     std::string body;
     // Add parameters (e.g. receiver etc.)
@@ -38,7 +38,7 @@ std::string CommandBuilder::buildFinalCommand(const std::string &commandName)
     }
 
     // add body part if it exists (e.g. "SEND")
-    for (const auto &line : messageLines) {
+    for (const auto &line : message_lines) {
         body += line;
     }
 
@@ -48,6 +48,6 @@ std::string CommandBuilder::buildFinalCommand(const std::string &commandName)
     }
 
     // add content length to the command
-    commandStream << "Content-Length: " << body.length() << "\n" << body;
-    return commandStream.str();
+    cmd_stream << "Content-Length: " << body.length() << "\n" << body;
+    return cmd_stream.str();
 }

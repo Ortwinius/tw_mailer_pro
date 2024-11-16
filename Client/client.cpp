@@ -125,12 +125,12 @@ void Client::handle_login() {
     getHiddenUserInput("Password: ", inputPassword);
 
     CommandBuilder builder;
-    builder.addParameter(inputUsername);
-    builder.addParameter(inputPassword);
+    builder.add_parameter(inputUsername);
+    builder.add_parameter(inputPassword);
 
     username = inputUsername; // might be wrong - if so, in the next login-attempt it will be reset
 
-    std::string cmd = builder.buildFinalCommand("LOGIN");
+    std::string cmd = builder.build_final_cmd("LOGIN");
     send_command(cmd);
 }                                                    
 
@@ -142,21 +142,21 @@ void Client::handle_send() {
     getUserInput("Subject: ", subject);
 
     CommandBuilder builder;
-    builder.addParameter(username); // if user is not logged in -> username is empty
-    builder.addParameter(receiver);
-    builder.addParameter(subject);
-    builder.addMessageContent();
+    builder.add_parameter(username); // if user is not logged in -> username is empty
+    builder.add_parameter(receiver);
+    builder.add_parameter(subject);
+    builder.add_msg_content();
 
-    std::string command = builder.buildFinalCommand("SEND");
+    std::string command = builder.build_final_cmd("SEND");
     send_command(command);
 }
 
 // Method to handle the LIST command
 void Client::handle_list() {
     CommandBuilder builder;
-    builder.addParameter(username);
+    builder.add_parameter(username);
 
-    std::string cmd = builder.buildFinalCommand("LIST");
+    std::string cmd = builder.build_final_cmd("LIST");
     send_command(cmd);
 }
 
@@ -166,10 +166,10 @@ void Client::handle_read() {
     getUserInput("MsgNr: ", msg_number);
 
     CommandBuilder builder;
-    builder.addParameter(username); 
-    builder.addParameter(msg_number);
+    builder.add_parameter(username); 
+    builder.add_parameter(msg_number);
 
-    std::string cmd = builder.buildFinalCommand("READ");
+    std::string cmd = builder.build_final_cmd("READ");
     send_command(cmd);
 }
 
@@ -179,17 +179,17 @@ void Client::handle_delete() {
     getUserInput("Message number: ", msg_number);
 
     CommandBuilder builder;
-    builder.addParameter(username); 
-    builder.addParameter(msg_number);
+    builder.add_parameter(username); 
+    builder.add_parameter(msg_number);
 
-    std::string cmd = builder.buildFinalCommand("DEL");
+    std::string cmd = builder.build_final_cmd("DEL");
     send_command(cmd);
 }
 
 // Method to handle the QUIT command
 void Client::handle_quit() {
     CommandBuilder builder;
-    std::string cmd = builder.buildFinalCommand("QUIT");
+    std::string cmd = builder.build_final_cmd("QUIT");
     send_command(cmd);
 }
 

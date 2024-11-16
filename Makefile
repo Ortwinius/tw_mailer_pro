@@ -12,7 +12,7 @@ MAILMANAGER_DIR = Server/mail_manager
 # Alle Quell- und Header-Dateien finden
 SERVER_SRCS = $(wildcard $(SERVER_DIR)/*.cpp)
 MAILMANAGER_SRCS=$(wildcard $(MAILMANAGER_DIR)/*.cpp)
-CLIENT_SRCS = $(wildcard $(CLIENT_DIR)/*.cpp) Client/commandBuilder/commandBuilder.cpp
+CLIENT_SRCS = $(wildcard $(CLIENT_DIR)/*.cpp) Client/command_builder/command_builder.cpp
 UTILS_SRCS = utils/helpers.cpp
 
 # Ziel-Executables

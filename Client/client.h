@@ -3,7 +3,7 @@
 
 #include <string>
 #include <unordered_map>
-#include "commandBuilder/commandBuilder.h"
+#include "command_builder/command_builder.h"
 #include "../utils/helpers.h"
 
 class Client

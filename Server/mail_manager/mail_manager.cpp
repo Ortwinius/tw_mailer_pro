@@ -2,8 +2,9 @@
 #include <semaphore.h>
 #include <filesystem>
 
-MailManager::MailManager(const std::filesystem::path &mail_directory):mail_directory(mail_directory) {
-}
+MailManager::MailManager(const std::filesystem::path &mail_directory)
+: mail_directory(mail_directory) 
+{}
 
 void MailManager::handle_list(int consfd, const std::string &authenticatedUser, sem_t *sem) {
     // TODO
