@@ -11,9 +11,11 @@
 #include <ldap.h>
 #include <lber.h>
 
+
 Server::Server(int port, const fs::path &mailDirectory) 
 : port(port)
 , mail_manager(mailDirectory)
+, blacklist()
 { 
   attempted_logins_cnt = 0;
   init_socket(); 
@@ -92,7 +94,7 @@ void Server::listen_for_connections() {
     else if (pid_t == 0) {
       std::cout << "Accepted connection with file descriptor: " << peersoc << "\n";
       close(socket_fd);
-      handle_communication(peersoc, &sem);
+      handle_communication(peersoc, &sem, "127.0.0.1");
       exit(EXIT_SUCCESS);
     } 
     else {
@@ -102,7 +104,7 @@ void Server::listen_for_connections() {
   }
 }
 
-void Server::handle_communication(int consfd, sem_t *sem) {
+void Server::handle_communication(int consfd, sem_t *sem, std::string client_ip) {
   ssize_t bufferSize = 64;
   char *buffer = new char[bufferSize];
 
@@ -152,7 +154,7 @@ void Server::handle_communication(int consfd, sem_t *sem) {
       validFormat = false;
     }
 
-    std::cout << "Received: " << buffer << "\n";
+    std::cout << "\n\nReceived: " << buffer << "\n";
 
     if (!validFormat) {
       send_error(consfd, "Message has invalid format"); // Respond with an error message
@@ -166,7 +168,7 @@ void Server::handle_communication(int consfd, sem_t *sem) {
     }
     if (command == "LOGIN") {
       std::cout << "Processing LOGIN command" << std::endl;
-      handle_login(consfd, buffer, authenticatedUser, loggedIn);
+      handle_login(consfd, buffer, authenticatedUser, loggedIn, client_ip);
     } 
     else if (loggedIn) {
       if (command == "SEND") {
@@ -242,11 +244,22 @@ bool Server::checkContentLengthHeader(std::string &contentLengthHeader, int &con
   return true;
 }
 
-void Server::handle_login(int consfd, const std::string &buffer, std::string &authenticatedUser, bool &loggedIn) {
+void Server::handle_login(int consfd, const std::string &buffer, std::string &authenticatedUser, bool &loggedIn, std::string client_ip) {
+  if(blacklist.is_blacklisted(client_ip))
+  {
+     send_error(consfd, "Blacklisted IP tried to login");
+     return;
+  }
+  
+  attempted_logins_cnt++;
+  if (attempted_logins_cnt > 3) {
 
-  // TODO
-  // IF ATTEMPTED_LOGIN_CNT > 3 && 1 MIN PASSED -> YOU CAN LOGIN AGAIN + DELETE NAME FROM BLACKLIST + RESET ATTEMPTED_CNT
-  // ELSE RETURN ERR
+    blacklist.add(client_ip);
+    attempted_logins_cnt=0;
+    std::cout << "Too many failed login attempts, IP " << client_ip << " is now blacklisted." << std::endl;
+    send_error(consfd, "Too many login attempts");
+    return;
+  }
 
   std::string line;
   std::string username;

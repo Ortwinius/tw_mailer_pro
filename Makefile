@@ -7,11 +7,13 @@ LDAPFLAGS = -lldap -llber
 SERVER_DIR = Server
 CLIENT_DIR = Client
 UTILS_DIR = utils
-MAILMANAGER_DIR = Server/mail_manager
+MAILMANAGER_DIR = Server/MailManager
+BLACKLIST_DIR = Server/Blacklist
 
 # Alle Quell- und Header-Dateien finden
 SERVER_SRCS = $(wildcard $(SERVER_DIR)/*.cpp)
 MAILMANAGER_SRCS=$(wildcard $(MAILMANAGER_DIR)/*.cpp)
+BLACKLIST_SRCS=$(wildcard $(BLACKLIST_DIR)/*.cpp)
 CLIENT_SRCS = $(wildcard $(CLIENT_DIR)/*.cpp) Client/command_builder/command_builder.cpp
 UTILS_SRCS = utils/helpers.cpp
 
@@ -22,7 +24,7 @@ TARGETS = twmailer-server twmailer-client
 all: $(TARGETS)
 
 # Regeln zum Bauen der Ziele
-twmailer-server: $(SERVER_SRCS) $(UTILS_SRCS) $(MAILMANAGER_SRCS)
+twmailer-server: $(SERVER_SRCS) $(UTILS_SRCS) $(MAILMANAGER_SRCS) $(BLACKLIST_SRCS)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDAPFLAGS)
 
 twmailer-client: $(CLIENT_SRCS) $(UTILS_SRCS) 
