@@ -22,8 +22,6 @@ private:
     std::string ip_address;
     int port;
     int socket_fd;
-    // user credentials
-    std::string username;
     
     // Private methods for internal functionality
     void init_socket();

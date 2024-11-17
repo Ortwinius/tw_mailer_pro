@@ -11,7 +11,6 @@ Client::Client(const std::string& ip, int port)
 , port(port)
 , socket_fd(-1) 
 {
-    username = "";
     init_socket();
 }
 
@@ -128,8 +127,6 @@ void Client::handle_login() {
     builder.add_parameter(inputUsername);
     builder.add_parameter(inputPassword);
 
-    username = inputUsername; // might be wrong - if so, in the next login-attempt it will be reset
-
     std::string cmd = builder.build_final_cmd("LOGIN");
     send_command(cmd);
 }                                                    
@@ -142,7 +139,6 @@ void Client::handle_send() {
     getUserInput("Subject: ", subject);
 
     CommandBuilder builder;
-    builder.add_parameter(username); // if user is not logged in -> username is empty
     builder.add_parameter(receiver);
     builder.add_parameter(subject);
     builder.add_msg_content();
@@ -154,7 +150,6 @@ void Client::handle_send() {
 // Method to handle the LIST command
 void Client::handle_list() {
     CommandBuilder builder;
-    builder.add_parameter(username);
 
     std::string cmd = builder.build_final_cmd("LIST");
     send_command(cmd);
@@ -166,7 +161,6 @@ void Client::handle_read() {
     getUserInput("MsgNr: ", msg_number);
 
     CommandBuilder builder;
-    builder.add_parameter(username); 
     builder.add_parameter(msg_number);
 
     std::string cmd = builder.build_final_cmd("READ");
@@ -179,7 +173,6 @@ void Client::handle_delete() {
     getUserInput("Message number: ", msg_number);
 
     CommandBuilder builder;
-    builder.add_parameter(username); 
     builder.add_parameter(msg_number);
 
     std::string cmd = builder.build_final_cmd("DEL");

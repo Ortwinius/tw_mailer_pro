@@ -175,19 +175,19 @@ void Server::handle_communication(int consfd, sem_t *sem) {
     else if (loggedIn) {
       if (command == "SEND") {
         std::cout << "Processing SEND command" << std::endl;
-        handle_send(consfd, buffer, authenticatedUser, sem);
+        mail_manager.handle_send(consfd, buffer, authenticatedUser, sem);
       } 
       else if (command == "LIST") {
         std::cout << "Processing LIST command" << std::endl;
-        handle_list(consfd, authenticatedUser, sem);
+        mail_manager.handle_list(consfd, authenticatedUser, sem);
       } 
       else if (command == "READ") {
         std::cout << "Processing READ command" << std::endl;
-        handle_read(consfd, buffer, authenticatedUser, sem);
+        mail_manager.handle_read(consfd, buffer, authenticatedUser, sem);
       } 
       else if (command == "DEL") {
         std::cout << "Processing DEL command" << std::endl;
-        handle_delete(consfd, buffer, authenticatedUser, sem);
+        mail_manager.handle_delete(consfd, buffer, authenticatedUser, sem);
       } 
       else {
         send_error(consfd, "Message has unknown command"); // Respond with an error message
@@ -331,7 +331,7 @@ void Server::handle_login(int consfd, const std::string &buffer, std::string &au
   authenticatedUser.clear();
   attempted_logins_cnt++;
 }
-
+/*
 void Server::handle_list(int consfd, const std::string &authenticatedUser, sem_t *sem) {
   fs::path userInbox = mail_directory / authenticatedUser; // Path to the user's inbox
   if (!fs::exists(userInbox) || !fs::is_directory(userInbox)) {
@@ -546,7 +546,7 @@ void Server::handle_delete(int consfd, const std::string &buffer, const std::str
     send_error(consfd, "Failed to delete file in DEL"); // Message number does not exist
   }
 }
-
+*/
 const bool Server::is_valid_username(const std::string &name) {
   // Prüfen, ob die Länge des Strings größer als 8 ist
   if (name.length() > 8) {
