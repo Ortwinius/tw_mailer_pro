@@ -12,6 +12,7 @@ Client::Client(const std::string& ip, int port)
 , socket_fd(-1) 
 {
     init_socket();
+    init_function_routing();
 }
 
 // Destructor to close the socket if open
@@ -35,6 +36,16 @@ void Client::init_socket() {
         exit(EXIT_FAILURE);
     }
 }
+void Client::init_function_routing() {
+    command_map = {
+        {"QUIT", [&]() { handle_quit(); }},
+        {"LOGIN", [&]() { handle_login(); }},
+        {"SEND", [&]() { handle_send(); }},
+        {"LIST", [&]() { handle_list(); }},
+        {"READ", [&]() { handle_read(); }},
+        {"DEL", [&]() { handle_delete(); }}
+    };
+}
 
 // Method to connect to the server
 void Client::connect_to_server() {
@@ -57,43 +68,23 @@ void Client::connect_to_server() {
 
 // Method to handle user input and commands
 void Client::handle_user_input() {
-    //std::unordered_map<std::string, void*> functionMap;
-
     std::string input;
-    bool input_valid = false;
 
     while (true) {
         getUserInput(">", input);
 
-        if (input == "QUIT") {
-            input_valid = true;
-            handle_quit();
-            break;
-        } else if(input == "LOGIN"){
-            input_valid = true;
-            handle_login();
+        if(command_map.find(input) != command_map.end())
+        {
+            command_map[input](); // call corresponding cmd function
         }
-        else if (input == "SEND") {
-            input_valid = true;
-            handle_send();
-        } else if (input == "LIST") {
-            input_valid = true;
-            handle_list();
-        } else if (input == "READ") {
-            input_valid = true;
-            handle_read();
-        } else if (input == "DEL") {            
-            input_valid = true;
-            handle_delete();
-        } else {
-            std::cerr << "Input is not valid: unknown command." << std::endl;
+        else 
+        {
+            std::cerr << "Input is not valid: unknown command. Try again.\n";
+            continue;
         }
 
-        if(input_valid)
-        {
-            handle_response();
-            input_valid = false; //reset validation flag
-        }
+        // if cmd was valid and executed -> handle response
+        handle_response();
     }
 }
 

@@ -8,6 +8,7 @@
 #include <cstring>
 #include <unistd.h>
 #include <ctime>
+#include "../../utils/constants.h"
 
 Blacklist::Blacklist() {
     // Create or open shared memory
@@ -33,7 +34,7 @@ Blacklist::Blacklist() {
         throw std::runtime_error("Failed to create semaphore: " + std::to_string(errno));
     }
 
-    // Initialize the unordered_map in shared memory
+    // Initialize the unordered_map (hashmap) in shared memory
     blacklist = new (shm_ptr) std::unordered_map<std::string, time_t>();
 }
 
@@ -64,8 +65,8 @@ bool Blacklist::is_blacklisted(const std::string& ip) {
         time_t current_time = std::time(nullptr);  // Get current time
         time_t timestamp = it->second;  // Get timestamp from the blacklist entry
 
-        // Check if the difference between current time and the timestamp is within BLACKLIST_DURATION
-        if (current_time - timestamp <= BLACKLIST_DURATION) {
+        // Check if the difference between current time and the timestamp is within ServerConstants::BLACKLIST_TIMEOUT
+        if (current_time - timestamp <= ServerConstants::BLACKLIST_TIMEOUT) {
             sem_post(shm_sem); // Unlock shared memory
             return true;  // IP is blacklisted and not expired
         }
@@ -85,7 +86,7 @@ void Blacklist::clean() {
         
         time_t time_diff = now - it->second;
 
-        if (time_diff > BLACKLIST_DURATION) {
+        if (time_diff > ServerConstants::BLACKLIST_TIMEOUT) {
             // IP is expired, remove it
             std::cout << "Removing IP " << it->first << " due to expiration (last added " 
                       << time_diff << " seconds ago)" << std::endl;

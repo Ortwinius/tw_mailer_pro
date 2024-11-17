@@ -60,7 +60,7 @@ void Server::init_socket()
   }
 
   // socket starts listening for connection requests
-  if (listen(socket_fd, 6) == -1) {
+  if (listen(socket_fd, ServerConstants::MAX_PENDING_CONNECTIONS) == -1) {
     throw std::runtime_error("Unable to establish connection: " + std::to_string(errno));
   }
 }
@@ -76,17 +76,20 @@ void Server::listen_for_connections() {
   // Parent process doesnt check exit status, Kernel reclaims ressources
   signal(SIGCHLD, SIG_IGN);
 
-  struct sockaddr client;
-  socklen_t addrlen = sizeof(client);
+  struct sockaddr_in client_addr; 
+  socklen_t addrlen = sizeof(client_addr);
 
   while (true) {
-    int peersoc = accept(socket_fd, &client, &addrlen);
+    int peersoc = accept(socket_fd, (struct sockaddr *) &client_addr, &addrlen);
     if (peersoc == -1) {
-      std::cerr << "Unable to accept client connection.\n";
+      std::cerr << "Unable to accept client_addr connection.\n";
       continue; // Continue accepting other connections
     }
 
+    // get client_addr IP (convert it from network to address format)
+    std::string client_addr_ip = inet_ntoa(client_addr.sin_addr);
     pid_t = fork();
+
     if (pid_t < 0) {
       std::cerr << "Error: Fork failed" << std::endl;
       exit(EXIT_FAILURE);
@@ -94,7 +97,7 @@ void Server::listen_for_connections() {
     else if (pid_t == 0) {
       std::cout << "Accepted connection with file descriptor: " << peersoc << "\n";
       close(socket_fd);
-      handle_communication(peersoc, &sem, "127.0.0.1");
+      handle_communication(peersoc, &sem, client_addr_ip);
       exit(EXIT_SUCCESS);
     } 
     else {
@@ -104,8 +107,8 @@ void Server::listen_for_connections() {
   }
 }
 
-void Server::handle_communication(int consfd, sem_t *sem, std::string client_ip) {
-  ssize_t bufferSize = 64;
+void Server::handle_communication(int consfd, sem_t *sem, std::string client_addr_ip) {
+  ssize_t bufferSize = ServerConstants::BUFFER_SIZE;
   char *buffer = new char[bufferSize];
 
   bool validFormat = true;
@@ -118,7 +121,6 @@ void Server::handle_communication(int consfd, sem_t *sem, std::string client_ip)
     }
 
     buffer[totalReceived] = '\0'; // Null-terminate the received message at
-                                  // currentSize (counted by recv)
 
     std::string message(buffer);
 
@@ -130,7 +132,7 @@ void Server::handle_communication(int consfd, sem_t *sem, std::string client_ip)
     std::getline(stream, contentLengthHeader);
     int contentLength;
 
-    int headerAndCommandLength = command.length()+ 1 + contentLengthHeader.length()+ 1; // +1 for each newLine
+    int headerAndCommandLength = command.length() + 1 + contentLengthHeader.length() + 1; // +1 for each newLine
 
     // check if contentLengthHeader is correct Format(content-length: <length>),
     // get length
@@ -162,13 +164,13 @@ void Server::handle_communication(int consfd, sem_t *sem, std::string client_ip)
 
     // QUIT to close conn
     if (command == "QUIT") {
-      std::cout << "Closing connection with client [FileDescriptor: " << consfd << "]\n";
+      std::cout << "Closing connection with client_addr [FileDescriptor: " << consfd << "]\n";
       close(consfd);
       break;
     }
     if (command == "LOGIN") {
       std::cout << "Processing LOGIN command" << std::endl;
-      handle_login(consfd, buffer, authenticatedUser, loggedIn, client_ip);
+      handle_login(consfd, buffer, authenticatedUser, loggedIn, client_addr_ip);
     } 
     else if (loggedIn) {
       if (command == "SEND") {
@@ -192,8 +194,8 @@ void Server::handle_communication(int consfd, sem_t *sem, std::string client_ip)
       }
     } 
     else {
-      std::cout << "User unauthorized" << std::endl;
-      send(consfd, "Unauthorized\n", 13, 0);
+      std::cerr << "User unauthorized" << std::endl;
+      send(consfd, ServerConstants::RESPONSE_UNAUTHORIZED, 13, 0);
     }
   }
   delete[] buffer; // Free the buffer memory
@@ -244,19 +246,19 @@ bool Server::checkContentLengthHeader(std::string &contentLengthHeader, int &con
   return true;
 }
 
-void Server::handle_login(int consfd, const std::string &buffer, std::string &authenticatedUser, bool &loggedIn, std::string client_ip) {
-  if(blacklist.is_blacklisted(client_ip))
+void Server::handle_login(int consfd, const std::string &buffer, std::string &authenticatedUser, bool &loggedIn, std::string client_addr_ip) {
+  if(blacklist.is_blacklisted(client_addr_ip))
   {
      send_error(consfd, "Blacklisted IP tried to login");
      return;
   }
   
   attempted_logins_cnt++;
-  if (attempted_logins_cnt > 3) {
+  if (attempted_logins_cnt > ServerConstants::MAX_LOGIN_ATTEMPTS) {
 
-    blacklist.add(client_ip);
+    blacklist.add(client_addr_ip);
     attempted_logins_cnt=0;
-    std::cout << "Too many failed login attempts, IP " << client_ip << " is now blacklisted." << std::endl;
+    std::cout << "Too many failed login attempts, IP " << client_addr_ip << " is now blacklisted." << std::endl;
     send_error(consfd, "Too many login attempts");
     return;
   }
@@ -279,69 +281,37 @@ void Server::handle_login(int consfd, const std::string &buffer, std::string &au
     send_error(consfd, "Invalid password in LOGIN");
     return;
   }
-
-  LDAP *ldap_obj = nullptr;
-  const char *host = "ldap.technikum-wien.at";
-  int ldap_port = 389; 
-
-  std::string ldap_url = "ldap://" + std::string(host) + ":" + std::to_string(ldap_port);
-
-  int result = ldap_initialize(&ldap_obj, ldap_url.c_str());
-
-  if(result != LDAP_SUCCESS)
-  {
-    std::cerr << "LDAP initialization failed: " << ldap_err2string(result) << std::endl;
-    throw std::runtime_error("Error initializing LDAP");
-  }
-
-  int desired_version = LDAP_VERSION3;
-  result = ldap_set_option(ldap_obj, LDAP_OPT_PROTOCOL_VERSION, &desired_version);
-
-  if(result != LDAP_SUCCESS)
-  {
-    std::cerr << "Failed to set LDAP version " << ldap_err2string(result) << std::endl;
-    ldap_unbind_ext_s(ldap_obj, nullptr, nullptr); // Cleanup
-    throw std::runtime_error("Error setting LDAP version");
-  }
-
-  std::cout << "LDAP initialized and set to version 3\n";
-
-  std::string dn = "uid=" + username + ",ou=People,dc=technikum-wien,dc=at";
-
-  // cast password to LDAP-compatible BER-type
-  BerValue cred;
-  cred.bv_val = const_cast<char*>(password.c_str()); //const_cast to remove (const) bc ber-type expects non-const
-  cred.bv_len = password.length();
-
   
-  // Perform SASL bind using SIMPLE mechanism
-  result = ldap_sasl_bind_s(
-      ldap_obj,       // LDAP session handle
-      dn.c_str(),     // Distinguished Name (DN)
-      nullptr,        // Mechanism ("SIMPLE" uses nullptr)
-      &cred,          // Pointer to credentials BerValue
-      nullptr,        // Server controls (nullptr for none)
-      nullptr,        // Client controls (nullptr for none)
-      nullptr         // Pointer for result server credentials (not needed here)
-  );
+  // initialize ldap client obj and then try authenticate via SASL bind
+  std::string host_url = ServerConstants::HOST_URL;
+  LDAP_Module ldap_client = LDAP_Module(host_url);
 
-  if (result == LDAP_SUCCESS) {
-      std::cout << "LDAP SASL bind successful for user: " << username << std::endl;
+  // try catch block to catch any LDAP related errors
+  try
+  {
+    if(ldap_client.authenticate(username, password))
+    {
       loggedIn = true;
       authenticatedUser = username;
-      send(consfd, "OK\n", 3, 0);
-      return;
-  } 
-
-  // else error
-  std::cerr << "LDAP SASL bind failed: " << ldap_err2string(result) << std::endl;
-  send_error(consfd, "Invalid credentials in LOGIN");
-  loggedIn = false;
-  authenticatedUser.clear();
-  attempted_logins_cnt++;
+      send(consfd, ServerConstants::RESPONSE_OK, 3, 0);
+    }
+    else
+    {
+      std::cerr << "Invalid credentials for " << username << std::endl;
+      send_error(consfd, "Invalid credentials in LOGIN");
+      loggedIn = false;
+      authenticatedUser.clear();
+      attempted_logins_cnt++;
+    }
+  }
+  catch(const std::exception &e)
+  {
+    std::cerr << e.what() << '\n';
+  }
+  
 }
 
 const void Server::send_error(const int consfd, const std::string errorMessage) {
-  std::cout << "Send Error to Client - " << errorMessage << std::endl;
-  send(consfd, "ERR\n", 4, 0);
+  std::cout << "Send Error to client_addr - " << errorMessage << std::endl;
+  send(consfd, ServerConstants::RESPONSE_ERR, 4, 0);
 }

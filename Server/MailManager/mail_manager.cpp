@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iostream>
 #include <sys/socket.h>
+#include "../../utils/constants.h"
 
 MailManager::MailManager(const std::filesystem::path &mail_directory)
 : mail_directory(mail_directory) 
@@ -212,7 +213,7 @@ void MailManager::handle_delete(int consfd, const std::string &buffer, const std
   sem_post(sem); // Unlock semaphore after deleting file
 
   if (messageDeleted) {
-    send(consfd, "OK\n", 3, 0); // Message deleted successfully
+    send(consfd, ServerConstants::RESPONSE_OK, 3, 0); // Message deleted successfully
   } 
   else {
     send_error(consfd, "Failed to delete file in DEL"); // Message number does not exist
@@ -221,5 +222,5 @@ void MailManager::handle_delete(int consfd, const std::string &buffer, const std
 
 const void MailManager::send_error(const int consfd, const std::string errorMessage) {
   std::cout << "Send Error to Client - " << errorMessage << std::endl;
-  send(consfd, "ERR\n", 4, 0);
+  send(consfd, ServerConstants::RESPONSE_ERR, 4, 0);
 }

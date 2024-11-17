@@ -7,6 +7,7 @@
 #include "../utils/constants.h"
 #include "MailManager/mail_manager.h"
 #include "Blacklist/blacklist.h"
+#include "LdapModule/ldap_module.h"
 
 namespace fs = std::filesystem;
 

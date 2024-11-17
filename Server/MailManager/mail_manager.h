@@ -1,8 +1,10 @@
+#ifndef MAIL_MANAGER_H
+#define MAIL_MANAGER_H
+
 #include <filesystem>
 #include <semaphore.h>
 
 namespace fs = std::filesystem;
-
 
 class MailManager 
 {
@@ -17,3 +19,4 @@ public:
 private:
     std::filesystem::path mail_directory;
 };
+#endif //MAIL_MANAGER_H
