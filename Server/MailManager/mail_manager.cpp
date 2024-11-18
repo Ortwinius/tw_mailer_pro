@@ -141,9 +141,7 @@ void MailManager::handle_read(int consfd, const std::string &buffer, const std::
     if (counter == messageNr) {
       std::ifstream messageFile(entry.path());
       if (!messageFile.is_open()) {
-        send_error(consfd,
-                   "Unable to open message file in READ"); // Unable to open the
-                                                           // message file
+        send_error(consfd, "Unable to open message file in READ"); // Unable to open the message file
         return;
       }
 
@@ -156,7 +154,7 @@ void MailManager::handle_read(int consfd, const std::string &buffer, const std::
 
       sem_post(sem); // Unlock semaphore after reading the file
 
-      std::string response = "OK\n" + messageContent.str() + "\n"; // Add an additional newline at the end
+      std::string response = ServerConstants::RESPONSE_OK + messageContent.str() + "\n"; // Add an additional newline at the end
       send(consfd, response.c_str(), response.size(), 0);
       return;
     }
@@ -168,7 +166,7 @@ void MailManager::handle_read(int consfd, const std::string &buffer, const std::
 }
 
 void MailManager::handle_delete(int consfd, const std::string &buffer, const std::string &authenticatedUser, sem_t *sem) {
-     std::string line;
+  std::string line;
   std::string messageNrString;
 
   std::istringstream iss(buffer);

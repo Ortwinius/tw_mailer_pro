@@ -134,8 +134,8 @@ void Client::handle_send() {
     builder.add_parameter(subject);
     builder.add_msg_content();
 
-    std::string command = builder.build_final_cmd("SEND");
-    send_command(command);
+    std::string cmd = builder.build_final_cmd("SEND");
+    send_command(cmd);
 }
 
 // Method to handle the LIST command

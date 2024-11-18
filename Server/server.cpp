@@ -10,7 +10,8 @@
 #include <unistd.h>
 #include <ldap.h>
 #include <lber.h>
-
+#include "../utils/helpers.h"
+#include "../utils/constants.h"
 
 Server::Server(int port, const fs::path &mailDirectory) 
 : port(port)
@@ -97,6 +98,7 @@ void Server::listen_for_connections() {
     else if (pid_t == 0) {
       std::cout << "Accepted connection with file descriptor: " << peersoc << "\n";
       close(socket_fd);
+      // enter main cmd loop
       handle_communication(peersoc, &sem, client_addr_ip);
       exit(EXIT_SUCCESS);
     } 
@@ -200,25 +202,6 @@ void Server::handle_communication(int consfd, sem_t *sem, std::string client_add
   }
   delete[] buffer; // Free the buffer memory
   close(consfd);   // Ensure the peer socket is closed
-}
-
-void Server::resizeBuffer(char *&buffer, ssize_t &currentSize, ssize_t newCapacity) {
-  if (newCapacity <= currentSize) {
-    return; // No resizing needed if the new size is smaller or equal
-  }
-
-  // Allocate new memory
-  char *newBuffer = new char[newCapacity];
-
-  // Copy old data into the new buffer
-  std::memcpy(newBuffer, buffer, currentSize);
-
-  // Free the old buffer
-  delete[] buffer;
-
-  // Update the buffer pointer and size
-  buffer = newBuffer;
-  currentSize = newCapacity;
 }
 
 bool Server::checkContentLengthHeader(std::string &contentLengthHeader, int &contentLength) {

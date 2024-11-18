@@ -1,6 +1,7 @@
 #include "helpers.h"
 #include <termios.h>
 #include <unistd.h>
+#include <cstring>
 
 void getUserInput(const std::string& prompt, std::string& buffer)
 {
@@ -20,4 +21,24 @@ void getHiddenUserInput(const std::string& prompt, std::string& buffer)
     std::getline(std::cin, buffer); // read input into buffer
     tcsetattr(STDIN_FILENO, TCSANOW, &old_t_attr); // restore visibility by resetting terminal attributes 
     std::cout << "\n";
+}
+
+void resizeBuffer(char *&buffer, ssize_t &currentSize, ssize_t newCapacity)
+{
+  if (newCapacity <= currentSize) {
+    return; // No resizing needed if the new size is smaller or equal
+  }
+
+  // Allocate new memory
+  char *newBuffer = new char[newCapacity];
+
+  // Copy old data into the new buffer
+  std::memcpy(newBuffer, buffer, currentSize);
+
+  // Free the old buffer
+  delete[] buffer;
+
+  // Update the buffer pointer and size
+  buffer = newBuffer;
+  currentSize = newCapacity;
 }
