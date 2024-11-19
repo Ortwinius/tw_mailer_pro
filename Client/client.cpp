@@ -71,7 +71,7 @@ void Client::handle_user_input() {
     std::string input;
 
     while (true) {
-        getUserInput(">", input);
+        get_user_input(">", input);
 
         if(command_map.find(input) != command_map.end())
         {
@@ -99,6 +99,8 @@ void Client::handle_response() {
     char buffer[1024];
     ssize_t received = recv(socket_fd, buffer, sizeof(buffer) - 1, 0);
 
+    // TODO : delete first line (content-length)
+    // and resize buffer
     if (received > 0) {
         buffer[received] = '\0';
         std::cout << "Server: " << buffer << std::endl;
@@ -111,8 +113,8 @@ void Client::handle_response() {
 
 void Client::handle_login() {
     std::string inputUsername, inputPassword;
-    getUserInput("Username: ", inputUsername);
-    getHiddenUserInput("Password: ", inputPassword);
+    get_user_input("Username: ", inputUsername);
+    get_hidden_user_input("Password: ", inputPassword);
 
     CommandBuilder builder;
     builder.add_parameter(inputUsername);
@@ -126,8 +128,8 @@ void Client::handle_login() {
 void Client::handle_send() {
     std::string sender, receiver, subject;
 
-    getUserInput("Receiver: ", receiver);
-    getUserInput("Subject: ", subject);
+    get_user_input("Receiver: ", receiver);
+    get_user_input("Subject: ", subject);
 
     CommandBuilder builder;
     builder.add_parameter(receiver);
@@ -149,7 +151,7 @@ void Client::handle_list() {
 // Method to handle the READ command
 void Client::handle_read() {
     std::string msg_number;
-    getUserInput("MsgNr: ", msg_number);
+    get_user_input("MsgNr: ", msg_number);
 
     CommandBuilder builder;
     builder.add_parameter(msg_number);
@@ -161,7 +163,7 @@ void Client::handle_read() {
 // Method to handle the DELETE command
 void Client::handle_delete() {
     std::string msg_number;
-    getUserInput("Message number: ", msg_number);
+    get_user_input("Message number: ", msg_number);
 
     CommandBuilder builder;
     builder.add_parameter(msg_number);

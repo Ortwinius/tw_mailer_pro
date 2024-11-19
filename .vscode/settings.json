@@ -58,6 +58,7 @@
         "semaphore": "cpp",
         "shared_mutex": "cpp",
         "stop_token": "cpp",
-        "map": "cpp"
+        "map": "cpp",
+        "syncstream": "cpp"
     }
 }

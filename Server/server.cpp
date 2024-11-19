@@ -140,7 +140,7 @@ void Server::handle_communication(int consfd, sem_t *sem, std::string client_add
     // get length
     if (checkContentLengthHeader(contentLengthHeader, contentLength)) {
       if (contentLength + headerAndCommandLength > totalReceived) {
-        resizeBuffer(buffer, bufferSize, headerAndCommandLength + contentLength + 1);
+        resize_buffer(buffer, bufferSize, headerAndCommandLength + contentLength + 1);
 
         ssize_t remaining = bufferSize - totalReceived;
         ssize_t received = recv(consfd, &buffer[totalReceived], remaining, 0);
@@ -197,7 +197,8 @@ void Server::handle_communication(int consfd, sem_t *sem, std::string client_add
     } 
     else {
       std::cerr << "User unauthorized" << std::endl;
-      send(consfd, ServerConstants::RESPONSE_UNAUTHORIZED, 13, 0);
+      send_server_response(consfd, ServerConstants::RESPONSE_UNAUTHORIZED, 13, 0);
+      //send(consfd, ServerConstants::RESPONSE_UNAUTHORIZED, 13, 0);
     }
   }
   delete[] buffer; // Free the buffer memory

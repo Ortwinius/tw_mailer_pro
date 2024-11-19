@@ -17,9 +17,7 @@ namespace ServerConstants
     // Responses
     constexpr const char* RESPONSE_OK = "OK\n";
     constexpr const char* RESPONSE_ERR = "ERR\n";
-    constexpr const char* RESPONSE_UNAUTHORIZED = "Unauthorized\n";
-
-    
+    constexpr const char* RESPONSE_UNAUTHORIZED = "Unauthorized\n";    
 }
 
 #endif
