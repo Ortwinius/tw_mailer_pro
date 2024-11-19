@@ -103,7 +103,6 @@ void Client::handle_response() {
     char *buffer=new char[init_size]; // temporary buffer for chunks to be read in incrementally
     
     ssize_t total_received=recv(socket_fd, buffer, init_size-1, 0);
-
     if (total_received <= 0) {
       std::cout << "Receive error or connection closed.\n";
       return;
@@ -131,7 +130,10 @@ void Client::handle_response() {
             buffer[total_received]='\0';
         }
 
-        std::cout<<buffer<<std::endl;
+        // Skip the first line (content-length header) and print the rest
+        const char* body_start = buffer + content_length_header.size() + 1;
+        std::cout<<"\nServer Response:"<<std::endl;
+        std::cout << body_start << std::endl;
     }
     else
     {

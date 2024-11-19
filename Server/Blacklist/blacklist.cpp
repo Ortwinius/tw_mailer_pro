@@ -11,95 +11,111 @@
 #include "../../utils/constants.h"
 
 Blacklist::Blacklist() {
-    // Create or open shared memory
-    shm_fd = shm_open(shm_name, O_CREAT | O_RDWR, 0666);
-    if (shm_fd == -1) {
-        throw std::runtime_error("Failed to create shared memory: " + std::to_string(errno));
-    }
-
-    // Resize the shared memory
-    if (ftruncate(shm_fd, shm_size) == -1) {
-        throw std::runtime_error("Failed to resize shared memory: " + std::to_string(errno));
-    }
-
-    // Map shared memory to address space
-    shm_ptr = mmap(nullptr, shm_size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
-    if (shm_ptr == MAP_FAILED) {
-        throw std::runtime_error("Failed to map shared memory: " + std::to_string(errno));
-    }
-
-    // Initialize semaphore
-    shm_sem = sem_open(sem_name, O_CREAT, 0666, 1);
-    if (shm_sem == SEM_FAILED) {
-        std::cout<<"Failed to create Semaphore"<<std::endl;
-        throw std::runtime_error("Failed to create semaphore: " + std::to_string(errno));
-    }
-
-    // Initialize the unordered_map (hashmap) in shared memory
-    blacklist = new (shm_ptr) std::unordered_map<std::string, time_t>();
+    // Constructor, initializes the blacklist container (std::set).
 }
 
 Blacklist::~Blacklist() {
-    // Clean up shared memory and semaphore
-    munmap(shm_ptr, shm_size);
-    close(shm_fd);
-    shm_unlink(shm_name);
-    sem_close(shm_sem);
-    sem_unlink(sem_name);
+    // Destructor, you can clean up resources here if necessary.
 }
 
-void Blacklist::add(const std::string& ip) {
-    sem_wait(shm_sem); // Lock
+void Blacklist::add(const std::string& ip, sem_t* blacklist_sem) {
+    std::cout<<"before blacklist_sem wait"<<std::endl;
+    sem_wait(blacklist_sem);
+    std::cout<<"after blacklist_sem wait"<<std::endl;
+
+    std::ofstream blacklist_file(path, std::ios::app);  // Open file in append mode
+    if (!blacklist_file) {
+        std::cout << "Failed to open blacklist file for writing." << std::endl;
+        sem_post(blacklist_sem);
+        
+        return;
+    }
+
     time_t currTime = std::time(nullptr); // Get current timestamp
-    (*blacklist)[ip] = currTime;
-    sem_post(shm_sem); // Unlock
+    blacklist_file << ip << "," << currTime << std::endl;  // Write the IP and timestamp
+    sem_post(blacklist_sem);
     std::cout << "IP added to blacklist: " << ip << " at " << currTime << std::endl;
 }
 
-bool Blacklist::is_blacklisted(const std::string& ip) {
-    std::cout<<"before semaphore, ip: "<< ip << std::endl;   //toDelete
-    
-    sem_wait(shm_sem);
+bool Blacklist::is_blacklisted(const std::string& ip, sem_t* blacklist_sem) {
+    // Lock the semaphore
+    sem_wait(blacklist_sem);
 
-    std::cout<<"before iterator, ip: "<< ip << std::endl;   //toDelete
-    // Check if the IP is in the blacklist
-    auto it = blacklist->find(ip);
-    if (it != blacklist->end()) {
-        
-        time_t current_time = std::time(nullptr);  // Get current time
-        time_t timestamp = it->second;  // Get timestamp from the blacklist entry
+    std::ifstream blacklist_file(path);
+    if (!blacklist_file) {
+        std::cerr << "Failed to open blacklist file for reading." << std::endl;
+        // Unlock semaphore before returning
+        sem_post(blacklist_sem);
+        return false;
+    }
 
-        // Check if the difference between current time and the timestamp is within ServerConstants::BLACKLIST_TIMEOUT
-        if (current_time - timestamp <= ServerConstants::BLACKLIST_TIMEOUT) {
-            sem_post(shm_sem); // Unlock shared memory
-            return true;  // IP is blacklisted and not expired
+    std::string line;
+    time_t currTime = std::time(nullptr); // Get current timestamp
+    bool blacklisted = false;
+
+    while (std::getline(blacklist_file, line)) {
+        std::istringstream lineStream(line);
+        std::string stored_ip;
+        std::string timestamp_str;
+
+        if (std::getline(lineStream, stored_ip, ',') && std::getline(lineStream, timestamp_str)) {
+            // Convert the timestamp to time_t
+            time_t timestamp = std::stoll(timestamp_str);
+
+            // If the IP matches and the timestamp is within 60 seconds
+            if (stored_ip == ip && difftime(currTime, timestamp) <= ServerConstants::BLACKLIST_TIMEOUT) {
+                blacklisted = true;
+                break;
+            }
         }
     }
-    std::cout<<"after iterator"<< std::endl;   //toDelete
 
-    sem_post(shm_sem); 
-    return false;  // Either IP is not in blacklist or expired
+    // Unlock the semaphore before returning
+    sem_post(blacklist_sem);
+
+    return blacklisted;
 }
 
-void Blacklist::clean() {
-    sem_wait(shm_sem); 
+void Blacklist::cleanUp(sem_t* blacklist_sem) {
+    sem_wait(blacklist_sem);
 
-    time_t now = std::time(nullptr); // Get current time
-    auto it = blacklist->begin();
+    std::ifstream blacklist_file(path);
+    if (!blacklist_file) {
+        std::cerr << "Failed to open blacklist file for reading." << std::endl;
+        sem_post(blacklist_sem);
+        return;
+    }
 
-    while (it != blacklist->end()) {
-        
-        time_t time_diff = now - it->second;
+    std::stringstream valid_entries;
+    std::string line;
+    time_t currTime = std::time(nullptr); // Get current timestamp
 
-        if (time_diff > ServerConstants::BLACKLIST_TIMEOUT) {
-            // IP is expired, remove it
-            std::cout << "Removing IP " << it->first << " due to expiration (last added " 
-                      << time_diff << " seconds ago)" << std::endl;
-            it = blacklist->erase(it);  // Erase and move to the next element
-        } else {
-            ++it;  // Move to the next IP
+    // Read through the blacklist and filter out expired entries
+    while (std::getline(blacklist_file, line)) {
+        std::istringstream lineStream(line);
+        std::string stored_ip;
+        std::string timestamp_str;
+
+        if (std::getline(lineStream, stored_ip, ',') && std::getline(lineStream, timestamp_str)) {
+            time_t timestamp = std::stoll(timestamp_str);
+
+            // Keep only those entries that are not older than BLACKLIST_TIMEOUT
+            if (difftime(currTime, timestamp) <= ServerConstants::BLACKLIST_TIMEOUT) {
+                valid_entries << stored_ip << "," << timestamp_str << std::endl;
+            }
         }
     }
 
-    sem_post(shm_sem);
+    // Open file and only print valid entries in file
+    std::ofstream blacklist_file_out(path, std::ios::trunc);
+    if (!blacklist_file_out) {
+        std::cerr << "Failed to open blacklist file for cleaning." << std::endl;
+        sem_post(blacklist_sem);
+        return;
+    }
+
+    blacklist_file_out << valid_entries.str();
+
+    sem_post(blacklist_sem);
+    std::cout << "Blacklist cleaned up." << std::endl;
 }

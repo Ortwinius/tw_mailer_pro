@@ -13,17 +13,30 @@
 #include "../utils/helpers.h"
 #include "../utils/constants.h"
 
-Server::Server(int port, const fs::path &mailDirectory) 
-: port(port)
-, mail_manager(mailDirectory)
-, blacklist()
+Server::Server(int port, const fs::path &mailDirectory)
+    : port(port)
+    , mail_manager(mailDirectory)
+    , blacklist()
+    , mail_sem()   // Semaphore for mail access
+    , blacklist_sem()   // Semaphore for blacklist access
 { 
-  attempted_logins_cnt = 0;
-  init_socket(); 
+    attempted_logins_cnt = 0;
+    init_socket(); 
+
+    // Initialize semaphores
+    if (sem_init(&mail_sem, 1, 1) != 0) {
+        std::cerr << "Semaphore initialization failed for mail_sem." << std::endl;
+        exit(EXIT_FAILURE);
+    }
+    if (sem_init(&blacklist_sem, 1, 1) != 0) {
+        std::cerr << "Semaphore initialization failed for blacklist_sem." << std::endl;
+        exit(EXIT_FAILURE);
+    }
 }
 
 Server::~Server() 
 { 
+  blacklist.~Blacklist();
   close(socket_fd); 
 }
 
@@ -69,10 +82,6 @@ void Server::init_socket()
 void Server::listen_for_connections() {
   int pid_t;
 
-  // init semaphore
-  sem_t sem;
-  sem_init(&sem, 1, 1);
-
   // Automatically clean up child processes
   // Parent process doesnt check exit status, Kernel reclaims ressources
   signal(SIGCHLD, SIG_IGN);
@@ -99,7 +108,7 @@ void Server::listen_for_connections() {
       std::cout << "Accepted connection with file descriptor: " << peersoc << "\n";
       close(socket_fd);
       // enter main cmd loop
-      handle_communication(peersoc, &sem, client_addr_ip);
+      handle_communication(peersoc, client_addr_ip);
       exit(EXIT_SUCCESS);
     } 
     else {
@@ -109,11 +118,15 @@ void Server::listen_for_connections() {
   }
 }
 
-void Server::handle_communication(int consfd, sem_t *sem, std::string client_addr_ip) {
+void Server::handle_communication(int consfd, std::string client_addr_ip) {
+  // each time a new client is connected, blacklist is cleaned
+  blacklist.cleanUp(&blacklist_sem);
+  
   ssize_t buffer_size = ServerConstants::BUFFER_SIZE;
   char *buffer = new char[buffer_size];
 
   bool valid_format = true;
+
 
   while (true) {
     ssize_t total_received = recv(consfd, buffer, buffer_size - 1, 0);
@@ -171,19 +184,19 @@ void Server::handle_communication(int consfd, sem_t *sem, std::string client_add
     else if (loggedIn) {
       if (command == "SEND") {
         std::cout << "Processing SEND command" << std::endl;
-        mail_manager.handle_send(consfd, buffer, authenticatedUser, sem);
+        mail_manager.handle_send(consfd, buffer, authenticatedUser, &mail_sem);
       } 
       else if (command == "LIST") {
         std::cout << "Processing LIST command" << std::endl;
-        mail_manager.handle_list(consfd, authenticatedUser, sem);
+        mail_manager.handle_list(consfd, authenticatedUser, &mail_sem);
       } 
       else if (command == "READ") {
         std::cout << "Processing READ command" << std::endl;
-        mail_manager.handle_read(consfd, buffer, authenticatedUser, sem);
+        mail_manager.handle_read(consfd, buffer, authenticatedUser, &mail_sem);
       } 
       else if (command == "DEL") {
         std::cout << "Processing DEL command" << std::endl;
-        mail_manager.handle_delete(consfd, buffer, authenticatedUser, sem);
+        mail_manager.handle_delete(consfd, buffer, authenticatedUser, &mail_sem);
       } 
       else {
         std::cout << "Message has unknown command" << std::endl;
@@ -200,9 +213,8 @@ void Server::handle_communication(int consfd, sem_t *sem, std::string client_add
 }
 
 void Server::handle_login(int consfd, const std::string &buffer, std::string &authenticatedUser, bool &loggedIn, std::string client_addr_ip) {
-  std::cout<<"before checking blackist"<<std::endl; //toDelete
   try{
-    if(blacklist.is_blacklisted(client_addr_ip))
+    if(blacklist.is_blacklisted(client_addr_ip, &blacklist_sem))
     {
       std::cout << "Blacklisted IP tried to login" << std::endl;
       send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0); // Respond with an error message
@@ -212,12 +224,11 @@ void Server::handle_login(int consfd, const std::string &buffer, std::string &au
   catch(const std::exception& e){
     std::cout<<e.what()<<std::endl;
   }
-  std::cout<<"after checking blackist"<<std::endl; //toDelete
   
   attempted_logins_cnt++;
   if (attempted_logins_cnt > ServerConstants::MAX_LOGIN_ATTEMPTS) {
   
-    blacklist.add(client_addr_ip);
+    blacklist.add(client_addr_ip, &blacklist_sem);
     attempted_logins_cnt=0;
     std::cout << "Too many failed login attempts, IP " << client_addr_ip << " is now blacklisted." << std::endl;
     send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0); // Respond with an error message
@@ -260,7 +271,7 @@ void Server::handle_login(int consfd, const std::string &buffer, std::string &au
     }
     else
     {
-      std::cout << "Invalid credentials for " << username << "in LOGIN" << std::endl;
+      std::cout << "Invalid credentials for " << username << " in LOGIN" << std::endl;
       send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0);
       loggedIn = false;
       authenticatedUser.clear();
