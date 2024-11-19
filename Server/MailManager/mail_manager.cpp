@@ -100,7 +100,7 @@ void MailManager::handle_send(int consfd, const std::string &buffer, const std::
     sem_post(sem); // unlock semaphore after closing messageFile
 
     std::cout << "Saved Mail " << subject << " in inbox of " << receiver << std::endl;
-    send_server_response(consfd, "OK\n", 3, 0);
+    send_server_response(consfd, ServerConstants::RESPONSE_OK, 3, 0);
   } 
   else {
     sem_post(sem); // unlock semaphore if writing to file failed

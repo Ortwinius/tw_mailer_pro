@@ -1,6 +1,10 @@
 #ifndef CONSTANTS_H
 #define CONSTANTS_H
 
+namespace GenericConstants
+{
+    constexpr int STD_BUFFER_SIZE = 64;
+}
 namespace ServerConstants
 {
     constexpr int MAX_PENDING_CONNECTIONS = 6;
