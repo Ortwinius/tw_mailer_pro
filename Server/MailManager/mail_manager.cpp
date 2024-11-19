@@ -4,6 +4,7 @@
 #include <iostream>
 #include <sys/socket.h>
 #include "../../utils/constants.h"
+#include "../../utils/helpers.h"
 
 MailManager::MailManager(const std::filesystem::path &mail_directory)
 : mail_directory(mail_directory) 
@@ -13,7 +14,7 @@ void MailManager::handle_list(int consfd, const std::string &authenticatedUser, 
     fs::path userInbox = mail_directory / authenticatedUser; // Path to the user's inbox
   if (!fs::exists(userInbox) || !fs::is_directory(userInbox)) {
     std::cout << "No messages or user unknown" << std::endl;
-    send(consfd, "0\n", 2, 0);
+    send_server_response(consfd, "0\n", 2, 0);
     return;
   }
 
@@ -50,7 +51,7 @@ void MailManager::handle_list(int consfd, const std::string &authenticatedUser, 
   finalResponse << response.str();       // Append all subjects
 
   // Send the complete response
-  send(consfd, finalResponse.str().c_str(), finalResponse.str().size(), 0);
+  send_server_response(consfd, finalResponse.str().c_str(), finalResponse.str().size(), 0);
 }
 
 void MailManager::handle_send(int consfd, const std::string &buffer, const std::string &authenticatedUser, sem_t *sem) {
@@ -64,12 +65,14 @@ void MailManager::handle_send(int consfd, const std::string &buffer, const std::
   std::getline(iss, skipLine, '\n');
 
   if (!std::getline(iss, receiver) || receiver.empty()) {
-    send_error(consfd, "Invalid receiver in SEND");
+    std::cerr << "Invalid receiver in LIST" << std::endl;
+    send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0);
     return;
   }
 
   if (!std::getline(iss, subject) || subject.empty()) {
-    send_error(consfd, "Invalid subject in SEND");
+    std::cerr << "Invalid subject in LIST" << std::endl;
+    send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0);
     return;
   }
 
@@ -97,16 +100,17 @@ void MailManager::handle_send(int consfd, const std::string &buffer, const std::
     sem_post(sem); // unlock semaphore after closing messageFile
 
     std::cout << "Saved Mail " << subject << " in inbox of " << receiver << std::endl;
-    send(consfd, "OK\n", 3, 0);
+    send_server_response(consfd, "OK\n", 3, 0);
   } 
   else {
     sem_post(sem); // unlock semaphore if writing to file failed
-    send_error(consfd, "Error when opening folder to save mail");
+    std::cerr << "Error while opening folder to save mail in SEND" << std::endl;
+    send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0);
   }
 }
 
 void MailManager::handle_read(int consfd, const std::string &buffer, const std::string &authenticatedUser, sem_t *sem) {
-    std::string line;
+  std::string line;
   std::string messageNrString;
 
   std::istringstream iss(buffer);
@@ -114,7 +118,8 @@ void MailManager::handle_read(int consfd, const std::string &buffer, const std::
   std::getline(iss, line, '\n');
 
   if (!std::getline(iss, messageNrString) || messageNrString.empty()) {
-    send_error(consfd, "Invalid Message number in READ");
+    std::cerr << "Invalid message number in READ" << std::endl;
+    send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0);
     return;
   }
 
@@ -123,7 +128,8 @@ void MailManager::handle_read(int consfd, const std::string &buffer, const std::
     messageNr = std::stoi(messageNrString);
   } catch (const std::exception &e) {
     std::cerr << e.what() << '\n';
-    send_error(consfd, "Error when parsing Message number to int in READ");
+    std::cerr << "Error while parsing message number in READ" << std::endl;
+    send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0);
     return;
   }
 
@@ -131,7 +137,9 @@ void MailManager::handle_read(int consfd, const std::string &buffer, const std::
   fs::path userInbox = mail_directory / authenticatedUser; // Path to the user's inbox
   if (!fs::exists(userInbox) || !fs::is_directory(userInbox)) {
     sem_post(sem); // Unlock semaphore if dir doesnt exist
-    send_error(consfd, "No messages for user " + authenticatedUser + " in READ");
+    
+    std::cerr << "No messages for user " + authenticatedUser + " in READ" << std::endl;
+    send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0);
     return;
   }
 
@@ -141,7 +149,8 @@ void MailManager::handle_read(int consfd, const std::string &buffer, const std::
     if (counter == messageNr) {
       std::ifstream messageFile(entry.path());
       if (!messageFile.is_open()) {
-        send_error(consfd, "Unable to open message file in READ"); // Unable to open the message file
+        std::cerr << "Unable to open message file in READ" << std::endl;
+        send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0);
         return;
       }
 
@@ -155,14 +164,15 @@ void MailManager::handle_read(int consfd, const std::string &buffer, const std::
       sem_post(sem); // Unlock semaphore after reading the file
 
       std::string response = ServerConstants::RESPONSE_OK + messageContent.str() + "\n"; // Add an additional newline at the end
-      send(consfd, response.c_str(), response.size(), 0);
+      send_server_response(consfd, response.c_str(), response.size(), 0);
       return;
     }
   }
   sem_post(sem); // unlock after iterator finished
 
   // invalid message number
-  send_error(consfd, "Invalid Message number in READ");
+  std::cerr << "Invalid message number in READ" << std::endl;
+  send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0);
 }
 
 void MailManager::handle_delete(int consfd, const std::string &buffer, const std::string &authenticatedUser, sem_t *sem) {
@@ -174,7 +184,8 @@ void MailManager::handle_delete(int consfd, const std::string &buffer, const std
   std::getline(iss, line, '\n');
 
   if (!std::getline(iss, messageNrString) || messageNrString.empty()) {
-    send_error(consfd, "Invalid message number in DEL");
+    std::cerr << "Invalid message number in DEL" << std::endl;
+    send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0);
     return;
   }
 
@@ -183,7 +194,8 @@ void MailManager::handle_delete(int consfd, const std::string &buffer, const std
     messageNr = std::stoi(messageNrString);
   } catch (const std::exception &e) {
     std::cerr << e.what() << '\n';
-    send_error(consfd, "Error when parsing message number to int in DEL");
+    std::cerr << "Error while parsing message number in DEL" << std::endl;
+    send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0);
     return;
   }
 
@@ -191,7 +203,8 @@ void MailManager::handle_delete(int consfd, const std::string &buffer, const std
 
   sem_wait(sem); // Lock semaphore before accessing the filesystem
   if (!fs::exists(userInbox) || !fs::is_directory(userInbox)) {
-    send_error(consfd, "No messages or User unknown");
+    std::cerr << "No messages or user unknown in DEL" << std::endl;
+    send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0);
     sem_post(sem); // Unlock if dir doesnt exist
     return;
   }
@@ -211,14 +224,10 @@ void MailManager::handle_delete(int consfd, const std::string &buffer, const std
   sem_post(sem); // Unlock semaphore after deleting file
 
   if (messageDeleted) {
-    send(consfd, ServerConstants::RESPONSE_OK, 3, 0); // Message deleted successfully
+    send_server_response(consfd, ServerConstants::RESPONSE_OK, 3, 0); // Message deleted successfully
   } 
   else {
-    send_error(consfd, "Failed to delete file in DEL"); // Message number does not exist
+    std::cerr << "Error while deleting file in DEL" << std::endl;
+    send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0);
   }
-}
-
-const void MailManager::send_error(const int consfd, const std::string errorMessage) {
-  std::cout << "Send Error to Client - " << errorMessage << std::endl;
-  send(consfd, ServerConstants::RESPONSE_ERR, 4, 0);
 }

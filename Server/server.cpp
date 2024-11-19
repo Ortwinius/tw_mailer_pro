@@ -126,7 +126,7 @@ void Server::handle_communication(int consfd, sem_t *sem, std::string client_add
 
     std::string message(buffer);
 
-    std::istringstream stream(message); // create stream for msg buffer
+    std::istringstream stream(buffer); // create stream for msg buffer
     std::string command;
     std::getline(stream, command); // get Command (first line)
 
@@ -161,7 +161,8 @@ void Server::handle_communication(int consfd, sem_t *sem, std::string client_add
     std::cout << "\n\nReceived: " << buffer << "\n";
 
     if (!validFormat) {
-      send_error(consfd, "Message has invalid format"); // Respond with an error message
+      std::cerr << "Message has invalid format" << std::endl;
+      send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0); // Respond with an error message
     }
 
     // QUIT to close conn
@@ -192,13 +193,14 @@ void Server::handle_communication(int consfd, sem_t *sem, std::string client_add
         mail_manager.handle_delete(consfd, buffer, authenticatedUser, sem);
       } 
       else {
-        send_error(consfd, "Message has unknown command"); // Respond with an error message
+        std::cerr << "Message has unknown command" << std::endl;
+        send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0); // Respond with an error message
       }
     } 
     else {
       std::cerr << "User unauthorized" << std::endl;
       send_server_response(consfd, ServerConstants::RESPONSE_UNAUTHORIZED, 13, 0);
-      //send(consfd, ServerConstants::RESPONSE_UNAUTHORIZED, 13, 0);
+      //send_sever_response(consfd, ServerConstants::RESPONSE_UNAUTHORIZED, 13, 0);
     }
   }
   delete[] buffer; // Free the buffer memory
@@ -233,7 +235,8 @@ bool Server::checkContentLengthHeader(std::string &contentLengthHeader, int &con
 void Server::handle_login(int consfd, const std::string &buffer, std::string &authenticatedUser, bool &loggedIn, std::string client_addr_ip) {
   if(blacklist.is_blacklisted(client_addr_ip))
   {
-     send_error(consfd, "Blacklisted IP tried to login");
+     std::cerr << "Blacklisted IP tried to login" << std::endl;
+        send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0); // Respond with an error message
      return;
   }
   
@@ -242,8 +245,8 @@ void Server::handle_login(int consfd, const std::string &buffer, std::string &au
 
     blacklist.add(client_addr_ip);
     attempted_logins_cnt=0;
-    std::cout << "Too many failed login attempts, IP " << client_addr_ip << " is now blacklisted." << std::endl;
-    send_error(consfd, "Too many login attempts");
+    std::cerr << "Too many failed login attempts, IP " << client_addr_ip << " is now blacklisted." << std::endl;
+    send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0); // Respond with an error message
     return;
   }
 
@@ -257,12 +260,14 @@ void Server::handle_login(int consfd, const std::string &buffer, std::string &au
   std::getline(iss, line, '\n');
 
   if (!std::getline(iss, username) || username.empty()) {
-    send_error(consfd, "Invalid sender in LOGIN");
+    std::cerr << "Invalid Sender in LOGIN" << std::endl;
+    send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0); // Respond with an error message
     return;
   }
 
   if (!std::getline(iss, password) || password.empty()) {
-    send_error(consfd, "Invalid password in LOGIN");
+    std::cerr << "Invalid Password in LOGIN" << std::endl;
+    send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0); // Respond with an error message
     return;
   }
   
@@ -277,12 +282,12 @@ void Server::handle_login(int consfd, const std::string &buffer, std::string &au
     {
       loggedIn = true;
       authenticatedUser = username;
-      send(consfd, ServerConstants::RESPONSE_OK, 3, 0);
+      send_server_response(consfd, ServerConstants::RESPONSE_OK, 3, 0);
     }
     else
     {
-      std::cerr << "Invalid credentials for " << username << std::endl;
-      send_error(consfd, "Invalid credentials in LOGIN");
+      std::cerr << "Invalid credentials for " << username << "in LOGIN" << std::endl;
+      send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0);
       loggedIn = false;
       authenticatedUser.clear();
       attempted_logins_cnt++;
@@ -293,9 +298,4 @@ void Server::handle_login(int consfd, const std::string &buffer, std::string &au
     std::cerr << e.what() << '\n';
   }
   
-}
-
-const void Server::send_error(const int consfd, const std::string errorMessage) {
-  std::cout << "Send Error to client_addr - " << errorMessage << std::endl;
-  send(consfd, ServerConstants::RESPONSE_ERR, 4, 0);
 }

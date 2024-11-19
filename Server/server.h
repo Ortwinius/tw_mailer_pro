@@ -32,7 +32,6 @@ private:
     bool checkContentLengthHeader(std::string &contentLengthHeader, int &contentLength);
     void handle_login(int consfd, const std::string &buffer, std::string &authenticated_user, bool &logged_in, std::string client_ip);
     const bool is_valid_username(const std::string &name);
-    const void send_error(const int consfd, const std::string errorMessage);
 };
 
 #endif
