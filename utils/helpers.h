@@ -11,4 +11,6 @@ void resize_buffer(char *&buffer, ssize_t &currentSize, ssize_t newCapacity);
 
 void send_server_response(int __fd, const void *buffer, size_t __n, int __flags);
 
+bool check_content_length_header(std::string &contentLengthHeader, int &contentLength);
+
 #endif

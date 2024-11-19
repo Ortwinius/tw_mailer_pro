@@ -83,7 +83,7 @@ void Server::listen_for_connections() {
   while (true) {
     int peersoc = accept(socket_fd, (struct sockaddr *) &client_addr, &addrlen);
     if (peersoc == -1) {
-      std::cerr << "Unable to accept client_addr connection.\n";
+      std::cout << "Unable to accept client_addr connection.\n";
       continue; // Continue accepting other connections
     }
 
@@ -92,7 +92,7 @@ void Server::listen_for_connections() {
     pid_t = fork();
 
     if (pid_t < 0) {
-      std::cerr << "Error: Fork failed" << std::endl;
+      std::cout << "Error: Fork failed" << std::endl;
       exit(EXIT_FAILURE);
     } 
     else if (pid_t == 0) {
@@ -110,58 +110,51 @@ void Server::listen_for_connections() {
 }
 
 void Server::handle_communication(int consfd, sem_t *sem, std::string client_addr_ip) {
-  ssize_t bufferSize = ServerConstants::BUFFER_SIZE;
-  char *buffer = new char[bufferSize];
+  ssize_t buffer_size = ServerConstants::BUFFER_SIZE;
+  char *buffer = new char[buffer_size];
 
-  bool validFormat = true;
+  bool valid_format = true;
 
   while (true) {
-    ssize_t totalReceived = recv(consfd, buffer, bufferSize - 1, 0);
-    if (totalReceived <= 0) {
-      std::cerr << "Receive error or connection closed.\n";
+    ssize_t total_received = recv(consfd, buffer, buffer_size - 1, 0);
+    if (total_received <= 0) {
+      std::cout << "Receive error or connection closed.\n";
       break;
     }
 
-    buffer[totalReceived] = '\0'; // Null-terminate the received message at
-
-    std::string message(buffer);
+    buffer[total_received] = '\0'; // Null-terminate the received message
 
     std::istringstream stream(buffer); // create stream for msg buffer
     std::string command;
     std::getline(stream, command); // get Command (first line)
 
-    std::string contentLengthHeader;
-    std::getline(stream, contentLengthHeader);
-    int contentLength;
-
-    int headerAndCommandLength = command.length() + 1 + contentLengthHeader.length() + 1; // +1 for each newLine
+    std::string content_length_header;
+    std::getline(stream, content_length_header);
+    int content_length;
 
     // check if contentLengthHeader is correct Format(content-length: <length>),
     // get length
-    if (checkContentLengthHeader(contentLengthHeader, contentLength)) {
-      if (contentLength + headerAndCommandLength > totalReceived) {
-        resize_buffer(buffer, bufferSize, headerAndCommandLength + contentLength + 1);
+    if (check_content_length_header(content_length_header, content_length)) {
+      int message_length = command.length() + 1 + content_length_header.length() + 1 + content_length;  // +1 for newLines
+      if (message_length > total_received) {
+        resize_buffer(buffer, buffer_size, message_length + 1);
 
-        ssize_t remaining = bufferSize - totalReceived;
-        ssize_t received = recv(consfd, &buffer[totalReceived], remaining, 0);
+        ssize_t remaining = buffer_size - total_received;
+        ssize_t received = recv(consfd, &buffer[total_received], remaining, 0);
 
-        totalReceived += received;
+        total_received += received;
 
-        buffer[totalReceived] = '\0';
-
-        // std::cout<<"TotalReceived: "<<totalReceived<<" | Buffer size:
-        // "<<bufferSize<<std::endl;
-        message = std::string(buffer);
+        buffer[total_received] = '\0';
       }
     } 
     else {
-      validFormat = false;
+      valid_format = false;
     }
 
     std::cout << "\n\nReceived: " << buffer << "\n";
 
-    if (!validFormat) {
-      std::cerr << "Message has invalid format" << std::endl;
+    if (!valid_format) {
+      std::cout << "Message has invalid format" << std::endl;
       send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0); // Respond with an error message
     }
 
@@ -193,59 +186,40 @@ void Server::handle_communication(int consfd, sem_t *sem, std::string client_add
         mail_manager.handle_delete(consfd, buffer, authenticatedUser, sem);
       } 
       else {
-        std::cerr << "Message has unknown command" << std::endl;
+        std::cout << "Message has unknown command" << std::endl;
         send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0); // Respond with an error message
       }
     } 
     else {
-      std::cerr << "User unauthorized" << std::endl;
+      std::cout << "User unauthorized" << std::endl;
       send_server_response(consfd, ServerConstants::RESPONSE_UNAUTHORIZED, 13, 0);
-      //send_sever_response(consfd, ServerConstants::RESPONSE_UNAUTHORIZED, 13, 0);
     }
   }
   delete[] buffer; // Free the buffer memory
   close(consfd);   // Ensure the peer socket is closed
 }
 
-bool Server::checkContentLengthHeader(std::string &contentLengthHeader, int &contentLength) {
-  if (contentLengthHeader.rfind("Content-Length:", 0) == 0) // Starts with "content-length:"
-  {
-    // get the actual length
-    std::string lengthStr = contentLengthHeader.substr(15);
-    lengthStr.erase(0, lengthStr.find_first_not_of(" \t")); // Trim leading spaces
-    lengthStr.erase(lengthStr.find_last_not_of(" \t") + 1);
-
-    try {
-      contentLength = std::stoul(lengthStr); // Convert to size_t
-    } catch (const std::invalid_argument &) {
-      std::cout << "Invalid content-length value." << std::endl;
-      return false;
-    } catch (const std::out_of_range &) {
-      std::cout << "Content-length value out of range." << std::endl;
-      return false;
-    }
-  } 
-  else {
-    std::cout << "Invalid format" << std::endl;
-    return false;
-  }
-  return true;
-}
-
 void Server::handle_login(int consfd, const std::string &buffer, std::string &authenticatedUser, bool &loggedIn, std::string client_addr_ip) {
-  if(blacklist.is_blacklisted(client_addr_ip))
-  {
-     std::cerr << "Blacklisted IP tried to login" << std::endl;
-        send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0); // Respond with an error message
-     return;
+  std::cout<<"before checking blackist"<<std::endl; //toDelete
+  try{
+    if(blacklist.is_blacklisted(client_addr_ip))
+    {
+      std::cout << "Blacklisted IP tried to login" << std::endl;
+      send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0); // Respond with an error message
+      return;
+    }
   }
+  catch(const std::exception& e){
+    std::cout<<e.what()<<std::endl;
+  }
+  std::cout<<"after checking blackist"<<std::endl; //toDelete
   
   attempted_logins_cnt++;
   if (attempted_logins_cnt > ServerConstants::MAX_LOGIN_ATTEMPTS) {
-
+  
     blacklist.add(client_addr_ip);
     attempted_logins_cnt=0;
-    std::cerr << "Too many failed login attempts, IP " << client_addr_ip << " is now blacklisted." << std::endl;
+    std::cout << "Too many failed login attempts, IP " << client_addr_ip << " is now blacklisted." << std::endl;
     send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0); // Respond with an error message
     return;
   }
@@ -260,13 +234,13 @@ void Server::handle_login(int consfd, const std::string &buffer, std::string &au
   std::getline(iss, line, '\n');
 
   if (!std::getline(iss, username) || username.empty()) {
-    std::cerr << "Invalid Sender in LOGIN" << std::endl;
+    std::cout << "Invalid Sender in LOGIN" << std::endl;
     send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0); // Respond with an error message
     return;
   }
 
   if (!std::getline(iss, password) || password.empty()) {
-    std::cerr << "Invalid Password in LOGIN" << std::endl;
+    std::cout << "Invalid Password in LOGIN" << std::endl;
     send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0); // Respond with an error message
     return;
   }
@@ -286,7 +260,7 @@ void Server::handle_login(int consfd, const std::string &buffer, std::string &au
     }
     else
     {
-      std::cerr << "Invalid credentials for " << username << "in LOGIN" << std::endl;
+      std::cout << "Invalid credentials for " << username << "in LOGIN" << std::endl;
       send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0);
       loggedIn = false;
       authenticatedUser.clear();
@@ -295,7 +269,8 @@ void Server::handle_login(int consfd, const std::string &buffer, std::string &au
   }
   catch(const std::exception &e)
   {
-    std::cerr << e.what() << '\n';
+    std::cout << e.what() << '\n';
+    send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0);
   }
   
 }

@@ -7,7 +7,7 @@ int main(int argc, char* argv[])
 {
     if (argc != 3) 
     {
-        std::cerr << "Usage: ./twmailer-server <port> <mail-spool-directoryname>\n";
+        std::cout << "Usage: ./twmailer-server <port> <mail-spool-directoryname>\n";
         return EXIT_FAILURE;
     }
 
@@ -21,7 +21,7 @@ int main(int argc, char* argv[])
     } 
     catch (const std::exception &e) 
     {
-        std::cerr << "Error: " << e.what() << "\n";
+        std::cout << "Error: " << e.what() << "\n";
         return EXIT_FAILURE;
     }
 

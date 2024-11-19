@@ -29,7 +29,6 @@ private:
     void init_socket();
     void listen_for_connections();
     void handle_communication(int consfd, sem_t *sem, std::string client_ip);
-    bool checkContentLengthHeader(std::string &contentLengthHeader, int &contentLength);
     void handle_login(int consfd, const std::string &buffer, std::string &authenticated_user, bool &logged_in, std::string client_ip);
     const bool is_valid_username(const std::string &name);
 };

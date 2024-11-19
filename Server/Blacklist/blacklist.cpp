@@ -31,6 +31,7 @@ Blacklist::Blacklist() {
     // Initialize semaphore
     shm_sem = sem_open(sem_name, O_CREAT, 0666, 1);
     if (shm_sem == SEM_FAILED) {
+        std::cout<<"Failed to create Semaphore"<<std::endl;
         throw std::runtime_error("Failed to create semaphore: " + std::to_string(errno));
     }
 
@@ -56,8 +57,11 @@ void Blacklist::add(const std::string& ip) {
 }
 
 bool Blacklist::is_blacklisted(const std::string& ip) {
+    std::cout<<"before semaphore, ip: "<< ip << std::endl;   //toDelete
+    
     sem_wait(shm_sem);
 
+    std::cout<<"before iterator, ip: "<< ip << std::endl;   //toDelete
     // Check if the IP is in the blacklist
     auto it = blacklist->find(ip);
     if (it != blacklist->end()) {
@@ -71,6 +75,7 @@ bool Blacklist::is_blacklisted(const std::string& ip) {
             return true;  // IP is blacklisted and not expired
         }
     }
+    std::cout<<"after iterator"<< std::endl;   //toDelete
 
     sem_post(shm_sem); 
     return false;  // Either IP is not in blacklist or expired

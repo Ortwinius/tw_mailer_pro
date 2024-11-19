@@ -54,3 +54,28 @@ void send_server_response(int __fd, const void *buffer, size_t __n, int __flags)
   // then send with send cmd
   send(__fd, header_and_body.c_str(), header_and_body.size(), __flags);
 }
+
+bool check_content_length_header(std::string &contentLengthHeader, int &contentLength) {
+  if (contentLengthHeader.rfind("Content-Length:", 0) == 0) // Starts with "content-length:"
+  {
+    // get the actual length
+    std::string lengthStr = contentLengthHeader.substr(15);
+    lengthStr.erase(0, lengthStr.find_first_not_of(" \t")); // Trim leading spaces
+    lengthStr.erase(lengthStr.find_last_not_of(" \t") + 1);
+
+    try {
+      contentLength = std::stoul(lengthStr); // Convert to size_t
+    } catch (const std::invalid_argument &) {
+      std::cout << "Invalid content-length value." << std::endl;
+      return false;
+    } catch (const std::out_of_range &) {
+      std::cout << "Content-length value out of range." << std::endl;
+      return false;
+    }
+  } 
+  else {
+    std::cout << "Invalid format" << std::endl;
+    return false;
+  }
+  return true;
+}

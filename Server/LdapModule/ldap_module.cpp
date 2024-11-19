@@ -17,13 +17,13 @@ LDAP_Module::~LDAP_Module()
 void LDAP_Module::init_ldap() {
     int result = ldap_initialize(&ldap_obj, ldap_url.c_str());
     if (result != LDAP_SUCCESS) {
-        std::cerr << "LDAP initialization failed: " << ldap_err2string(result) << std::endl;
+        std::cout << "LDAP initialization failed: " << ldap_err2string(result) << std::endl;
         throw std::runtime_error("Error initializing LDAP");
     }
 
     result = ldap_set_option(ldap_obj, LDAP_OPT_PROTOCOL_VERSION, &ServerConstants::DESIRED_LDAP_VERSION);
     if (result != LDAP_SUCCESS) {
-        std::cerr << "Failed to set LDAP version: " << ldap_err2string(result) << std::endl;
+        std::cout << "Failed to set LDAP version: " << ldap_err2string(result) << std::endl;
         cleanup();
         throw std::runtime_error("Error setting LDAP version");
     }
@@ -54,7 +54,7 @@ bool LDAP_Module::authenticate(const std::string &username, const std::string &p
         std::cout << "LDAP SASL bind successful for user: " << username << std::endl;
         return true;
     } else {
-        std::cerr << "LDAP SASL bind failed: " << ldap_err2string(result) << std::endl;
+        std::cout << "LDAP SASL bind failed: " << ldap_err2string(result) << std::endl;
         return false;
     }
 }

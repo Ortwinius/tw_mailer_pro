@@ -34,7 +34,7 @@ void Client::start() {
 void Client::init_socket() {
     socket_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (socket_fd == -1) {
-        std::cerr << "Socket creation failed." << std::endl;
+        std::cout << "Socket creation failed." << std::endl;
         exit(EXIT_FAILURE);
     }
 }
@@ -56,12 +56,12 @@ void Client::connect_to_server() {
     server_addr.sin_port = htons(port);
 
     if (inet_aton(ip_address.c_str(), &server_addr.sin_addr) == 0) {
-        std::cerr << "Invalid IP address" << std::endl;
+        std::cout << "Invalid IP address" << std::endl;
         exit(EXIT_FAILURE);
     }
 
     if (connect(socket_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
-        std::cerr << "Connection failed" << std::endl;
+        std::cout << "Connection failed" << std::endl;
         exit(EXIT_FAILURE);
     }
 
@@ -81,7 +81,7 @@ void Client::handle_user_input() {
         }
         else 
         {
-            std::cerr << "Input is not valid: unknown command. Try again.\n";
+            std::cout << "Input is not valid: unknown command. Try again.\n";
             continue;
         }
 
@@ -93,66 +93,53 @@ void Client::handle_user_input() {
 // Method to send the final command
 void Client::send_command(const std::string &command) {
     if (send(socket_fd, command.c_str(), command.length(), 0) == -1) {
-        std::cerr << "Sending failed" << std::endl;
+        std::cout << "Sending failed" << std::endl;
     }
 }
 // Method to handle responses from the server
 void Client::handle_response() {  
     std::string response; // To hold the full response
-    int init_size = GenericConstants::STD_BUFFER_SIZE;
-    char buffer[init_size]; // temporary buffer for chunks to be read in incrementally
-    ssize_t received;
+    ssize_t init_size = GenericConstants::STD_BUFFER_SIZE;
+    char *buffer=new char[init_size]; // temporary buffer for chunks to be read in incrementally
+    
+    ssize_t total_received=recv(socket_fd, buffer, init_size-1, 0);
 
-    while (true) {
-        // Read a chunk
-        received = recv(socket_fd, buffer, sizeof(buffer) - 1, 0);
-        if (received > 0) {
-            buffer[received] = '\0'; // Null-terminate the chunk
-            response.append(buffer, received); // Append the chunk to the response
-        } else if (received == 0) {
-            std::cout << "Server closed the connection\n";
-            break;
-        } else {
-            // recv() returned an error
-            std::cerr << "Receive failed" << std::endl;
-            return;
-        }
-
-        // Check if more data needs to be read (e.g., based on HTTP headers or protocol specifics)
-        if (received < (ssize_t) sizeof(buffer) - 1) {
-            // No more data to read
-            break;
-        }
-        
-        // Optional: Resize the buffer dynamically if your protocol allows it
-        // (You may not need this in this exact case as we're appending to `response`)
-        // resize_buffer(buffer, buffe);
+    if (total_received <= 0) {
+      std::cout << "Receive error or connection closed.\n";
+      return;
     }
 
-    // Process the full response
-    std::istringstream stream(response);
+    buffer[total_received]='\0';
 
-    // Remove the "Content-Length" line
-    std::string line;
-    while (std::getline(stream, line)) {
-        if (line.find("Content-Length:") == std::string::npos) {
-            // Keep processing the rest of the lines
-            std::cout << line << std::endl;
+    std::istringstream stream(buffer);
+
+    int content_length;
+    std::string content_length_header;
+    std::getline(stream, content_length_header);
+
+    if(check_content_length_header(content_length_header, content_length))
+    {
+        int message_length=content_length_header.size()+content_length+1;
+        if(message_length>total_received)
+        {
+            resize_buffer(buffer, init_size, message_length+1);
+
+            ssize_t remaining = message_length-total_received;
+            ssize_t received=recv(socket_fd, &buffer[total_received], remaining, 0);
+
+            total_received+=received;
+            buffer[total_received]='\0';
         }
-    }
-    // char buffer[1024];
-    // ssize_t received = recv(socket_fd, buffer, sizeof(buffer) - 1, 0);
 
-    // // TODO : delete first line (content-length)
-    // // and resize buffer
-    // if (received > 0) {
-    //     buffer[received] = '\0';
-    //     std::cout << "Server: " << buffer << std::endl;
-    // } else if (received == 0) {
-    //     std::cout << "Server closed the connection\n";
-    // } else {
-    //     std::cerr << "Receive failed" << std::endl;
-    // }
+        std::cout<<buffer<<std::endl;
+    }
+    else
+    {
+        std::cout<<"Received response with invalid format"<<std::endl;
+    }
+
+
+    delete[] buffer;
 }
 
 void Client::handle_login() {
