@@ -22,8 +22,8 @@ private:
     int port;
     int socket_fd;
     int attempted_logins_cnt;
-    bool loggedIn=false;
-    std::string authenticatedUser;
+    bool logged_in=false;
+    std::string authenticated_user;
 
     MailManager mail_manager;
     Blacklist blacklist;

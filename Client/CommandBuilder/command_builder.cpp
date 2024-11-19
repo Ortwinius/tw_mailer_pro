@@ -12,10 +12,10 @@ void CommandBuilder::add_msg_content()
     std::string line;
     std::cout << "Enter message content. End with a single '.' on a line by itself:\n";
 
-    while(true)
+    while (true)
     {
         std::getline(std::cin, line);
-        if(line == ".")
+        if (line == ".")
         {
             message_lines.push_back(".\n");
             break;
@@ -38,16 +38,18 @@ std::string CommandBuilder::build_final_cmd(const std::string &cmd_name)
     }
 
     // add body part if it exists (e.g. "SEND")
-    for (const auto &line : message_lines) {
+    for (const auto &line : message_lines)
+    {
         body += line;
     }
 
-
-    if (!body.empty() && body[0] == '\n') {
+    if (!body.empty() && body[0] == '\n')
+    {
         body.erase(0, 1);
     }
 
     // add content length to the command
-    cmd_stream << "Content-Length: " << body.length() << "\n" << body;
+    cmd_stream << "Content-Length: " << body.length() << "\n"
+               << body;
     return cmd_stream.str();
 }
