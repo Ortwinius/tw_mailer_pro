@@ -8,7 +8,7 @@ class Blacklist {
 public:
     // Constructor and Destructor
     Blacklist();
-    ~Blacklist();
+    ~Blacklist() = default;
 
     // Check if an IP is blacklisted
     bool is_blacklisted(const std::string& ip, sem_t* blacklist_sem);

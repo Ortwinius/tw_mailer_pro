@@ -3,12 +3,11 @@
 
 namespace GenericConstants
 {
-    constexpr int STD_BUFFER_SIZE = 64;
+    constexpr ssize_t STD_BUFFER_SIZE = 64;
 }
 namespace ServerConstants
 {
     constexpr int MAX_PENDING_CONNECTIONS = 6;
-    const ssize_t BUFFER_SIZE = 64;
     constexpr int MAX_LOGIN_ATTEMPTS = 3;
 
     // LDAP

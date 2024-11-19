@@ -14,8 +14,11 @@
 #include "../utils/constants.h"
 
 Server::Server(int port, const fs::path &mailDirectory)
-: port(port), mail_manager(mailDirectory), blacklist(), mail_sem() // Semaphore for mail access
-,blacklist_sem() // Semaphore for blacklist access
+: port(port)
+, mail_manager(mailDirectory)
+, blacklist()
+, mail_sem() // Semaphore for mail access
+, blacklist_sem() // Semaphore for blacklist access
 {
   attempted_logins_cnt = 0;
   init_socket();
@@ -23,19 +26,18 @@ Server::Server(int port, const fs::path &mailDirectory)
   // Initialize semaphores
   if (sem_init(&mail_sem, 1, 1) != 0)
   {
-    std::cerr << "Semaphore initialization failed for mail_sem." << std::endl;
+    std::cout << "Semaphore initialization failed for mail_sem." << std::endl;
     exit(EXIT_FAILURE);
   }
   if (sem_init(&blacklist_sem, 1, 1) != 0)
   {
-    std::cerr << "Semaphore initialization failed for blacklist_sem." << std::endl;
+    std::cout << "Semaphore initialization failed for blacklist_sem." << std::endl;
     exit(EXIT_FAILURE);
   }
 }
 
 Server::~Server()
 {
-  blacklist.~Blacklist();
   close(socket_fd);
 }
 
@@ -132,7 +134,7 @@ void Server::handle_communication(int consfd, std::string client_addr_ip)
   // each time a new client is connected, blacklist is cleaned
   blacklist.cleanUp(&blacklist_sem);
 
-  ssize_t buffer_size = ServerConstants::BUFFER_SIZE;
+  ssize_t buffer_size = GenericConstants::STD_BUFFER_SIZE;
   char *buffer = new char[buffer_size];
 
   bool valid_format = true;
@@ -178,7 +180,7 @@ void Server::handle_communication(int consfd, std::string client_addr_ip)
       valid_format = false;
     }
 
-    std::cout << "\n\nReceived: " << buffer << "\n";
+    std::cout << "\n\nReceived:\n" << buffer << "\n";
 
     if (!valid_format)
     {
@@ -301,7 +303,6 @@ void Server::handle_login(int consfd, const std::string &buffer, std::string &au
     }
     else
     {
-      std::cout << "Invalid credentials for " << username << " in LOGIN" << std::endl;
       send_server_response(consfd, ServerConstants::RESPONSE_ERR, 4, 0);
       logged_in = false;
       authenticated_user.clear();

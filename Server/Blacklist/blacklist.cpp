@@ -12,19 +12,17 @@
 
 Blacklist::Blacklist()
 {
-    // Constructor, initializes the blacklist container (std::set).
-}
-
-Blacklist::~Blacklist()
-{
-    // Destructor, you can clean up resources here if necessary.
+    std::ofstream blacklist_file(path, std::ios::app);
+    if (!blacklist_file) {
+        std::cout << "Error creating or accessing the blacklist file at " << path << std::endl;
+    } else {
+        std::cout << "Blacklist file ensured at " << path << std::endl;
+    }
 }
 
 void Blacklist::add(const std::string &ip, sem_t *blacklist_sem)
 {
-    std::cout << "before blacklist_sem wait" << std::endl;
     sem_wait(blacklist_sem);
-    std::cout << "after blacklist_sem wait" << std::endl;
 
     std::ofstream blacklist_file(path, std::ios::app); // Open file in append mode
     if (!blacklist_file)
@@ -49,7 +47,7 @@ bool Blacklist::is_blacklisted(const std::string &ip, sem_t *blacklist_sem)
     std::ifstream blacklist_file(path);
     if (!blacklist_file)
     {
-        std::cerr << "Failed to open blacklist file for reading." << std::endl;
+        std::cout << "Failed to open blacklist file for reading." << std::endl;
         // Unlock semaphore before returning
         sem_post(blacklist_sem);
         return false;
@@ -92,7 +90,7 @@ void Blacklist::cleanUp(sem_t *blacklist_sem)
     std::ifstream blacklist_file(path);
     if (!blacklist_file)
     {
-        std::cerr << "Failed to open blacklist file for reading." << std::endl;
+        std::cout << "Failed to open blacklist file for reading." << std::endl;
         sem_post(blacklist_sem);
         return;
     }
@@ -124,7 +122,7 @@ void Blacklist::cleanUp(sem_t *blacklist_sem)
     std::ofstream blacklist_file_out(path, std::ios::trunc);
     if (!blacklist_file_out)
     {
-        std::cerr << "Failed to open blacklist file for cleaning." << std::endl;
+        std::cout << "Failed to open blacklist file for cleaning." << std::endl;
         sem_post(blacklist_sem);
         return;
     }
